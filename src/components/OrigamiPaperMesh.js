@@ -71,11 +71,35 @@ export class OrigamiPaperMesh {
    */
   buildCraneMesh() {
     this.facetsGroup = new THREE.Group();
+    const half = this.paperSize / 2;
+
+    // Flat paper sheet visible during step 0 and cross-fading smoothly
+    const flatGeo = new THREE.PlaneGeometry(this.paperSize, this.paperSize, 2, 2);
+    flatGeo.rotateX(-Math.PI / 2);
+    this.flatSheet = new THREE.Mesh(flatGeo, this.frontMaterial);
+    this.flatSheet.receiveShadow = true;
+    this.flatSheet.castShadow = true;
+
+    // Crease lines overlay on 3D sheet
+    const lineCoords = [
+      -half, 0.05, -half,  half, 0.05, half,
+      -half, 0.05, half,   half, 0.05, -half,
+      0, 0.05, -half,      0, 0.05, half,
+      -half, 0.05, 0,      half, 0.05, 0
+    ];
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(lineCoords, 3));
+    this.creaseLines3D = new THREE.LineSegments(lineGeo, this.creaseLineMaterial);
+    this.flatSheet.add(this.creaseLines3D);
+
+    this.group.add(this.flatSheet);
+
+    // Folded Crane parts group
+    this.cranePartsGroup = new THREE.Group();
 
     // Central body spine
     const spineGeo = new THREE.BufferGeometry();
     const s = 25;
-    // Central diamond
     const verts = new Float32Array([
       0, 0, s,     -s, 0, 0,     0, s*0.3, 0,
       0, 0, s,      0, s*0.3, 0,  s, 0, 0,
@@ -128,6 +152,7 @@ export class OrigamiPaperMesh {
     neckGeo.setAttribute('position', new THREE.BufferAttribute(neckVerts, 3));
     neckGeo.computeVertexNormals();
     const neckMesh = new THREE.Mesh(neckGeo, this.frontMaterial);
+    neckMesh.castShadow = true;
     this.neckGroup.add(neckMesh);
 
     // Tail
@@ -140,14 +165,16 @@ export class OrigamiPaperMesh {
     tailGeo.setAttribute('position', new THREE.BufferAttribute(tailVerts, 3));
     tailGeo.computeVertexNormals();
     const tailMesh = new THREE.Mesh(tailGeo, this.frontMaterial);
+    tailMesh.castShadow = true;
     this.tailGroup.add(tailMesh);
 
-    this.facetsGroup.add(bodyMesh);
-    this.facetsGroup.add(this.leftWing);
-    this.facetsGroup.add(this.rightWing);
-    this.facetsGroup.add(this.neckGroup);
-    this.facetsGroup.add(this.tailGroup);
+    this.cranePartsGroup.add(bodyMesh);
+    this.cranePartsGroup.add(this.leftWing);
+    this.cranePartsGroup.add(this.rightWing);
+    this.cranePartsGroup.add(this.neckGroup);
+    this.cranePartsGroup.add(this.tailGroup);
 
+    this.facetsGroup.add(this.cranePartsGroup);
     this.group.add(this.facetsGroup);
     this.updateCraneStep(0, 0);
   }
@@ -261,35 +288,45 @@ export class OrigamiPaperMesh {
     // Calculate global fold ratio (0 = flat sheet, 1 = fully folded crane)
     const globalT = (step + t) / (totalSteps - 1);
 
+    if (this.flatSheet && this.cranePartsGroup) {
+      if (step === 0 && t < 0.1) {
+        this.flatSheet.visible = true;
+        this.cranePartsGroup.visible = false;
+      } else {
+        this.flatSheet.visible = false;
+        this.cranePartsGroup.visible = true;
+      }
+    }
+
     // Wings fold from flat (step 0..3) into compact (step 4..6), then expand outwards (step 7)
     if (this.leftWing && this.rightWing) {
       if (step < 4) {
-        const angle = (step + t) * 0.15;
+        const angle = (step + t) * 0.18;
         this.leftWing.rotation.z = angle;
         this.rightWing.rotation.z = -angle;
         this.leftWing.rotation.y = 0;
         this.rightWing.rotation.y = 0;
       } else if (step < 7) {
-        this.leftWing.rotation.z = 0.6 + (step - 4 + t) * 0.2;
-        this.rightWing.rotation.z = -0.6 - (step - 4 + t) * 0.2;
+        this.leftWing.rotation.z = 0.72 + (step - 4 + t) * 0.22;
+        this.rightWing.rotation.z = -0.72 - (step - 4 + t) * 0.22;
       } else {
         // Step 7: Wing unfolding flourish!
-        const wingFlourish = 1.2 - t * 0.8;
+        const wingFlourish = 1.38 - t * 0.95;
         this.leftWing.rotation.z = wingFlourish;
         this.rightWing.rotation.z = -wingFlourish;
-        this.leftWing.rotation.x = Math.sin(t * Math.PI) * 0.15;
-        this.rightWing.rotation.x = -Math.sin(t * Math.PI) * 0.15;
+        this.leftWing.rotation.x = Math.sin(t * Math.PI) * 0.2;
+        this.rightWing.rotation.x = -Math.sin(t * Math.PI) * 0.2;
       }
     }
 
     if (this.neckGroup && this.tailGroup) {
-      const neckAngle = Math.min(1, Math.max(0, (step - 3 + t) / 3)) * 0.9;
+      const neckAngle = Math.min(1, Math.max(0, (step - 3 + t) / 3)) * 0.95;
       this.neckGroup.rotation.x = neckAngle;
-      this.tailGroup.rotation.x = -neckAngle * 0.8;
+      this.tailGroup.rotation.x = -neckAngle * 0.85;
     }
 
-    // Dynamic paper thickness/flat elevation
-    this.facetsGroup.position.y = (1 - Math.cos(globalT * Math.PI * 0.5)) * 12;
+    // Dynamic paper elevation
+    this.facetsGroup.position.y = (1 - Math.cos(globalT * Math.PI * 0.5)) * 14;
   }
 
   updateBoxStep(step, t) {
