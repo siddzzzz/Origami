@@ -114,6 +114,16 @@ speedSelect.addEventListener('change', (e) => {
   sceneManager.playbackSpeed = parseFloat(e.target.value);
 });
 
+const btnToggleView = document.getElementById('btn-toggle-view');
+const viewModeLabel = document.getElementById('view-mode-label');
+
+if (btnToggleView) {
+  btnToggleView.addEventListener('click', () => {
+    const newMode = creaseViewer.toggleViewMode();
+    viewModeLabel.textContent = newMode === 'folded' ? 'Mode: Step Diagram' : 'Mode: Unfolded Flat Sheet';
+  });
+}
+
 btnReset2D.addEventListener('click', () => {
   creaseViewer.resetView();
 });
