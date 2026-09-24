@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { OrigamiKinematicsEngine } from './OrigamiKinematicsEngine.js';
+import { PureOrigamiSimulator } from './PureOrigamiSimulator.js';
 
 /**
  * ThreeDSceneManager
@@ -119,7 +119,7 @@ export class ThreeDSceneManager {
     if (this.paperMesh) {
       this.scene.remove(this.paperMesh.group);
     }
-    this.paperMesh = new OrigamiKinematicsEngine(modelData);
+    this.paperMesh = new PureOrigamiSimulator(modelData);
     this.scene.add(this.paperMesh.group);
 
     this.currentStep = 0;

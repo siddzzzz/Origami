@@ -1,4 +1,4 @@
-import { RIGID_ORIGAMI_MODELS } from './data/rigidOrigamiModels.js';
+import { CLEAN_ORIGAMI_MODELS } from './data/cleanOrigamiModels.js';
 import { CreasePatternViewer } from './components/CreasePatternViewer.js';
 import { ThreeDSceneManager } from './components/ThreeDSceneManager.js';
 
@@ -30,7 +30,7 @@ const fileMeshInput = document.getElementById('file-mesh-input');
 const creaseViewer = new CreasePatternViewer(creaseCanvas);
 const sceneManager = new ThreeDSceneManager(threeContainer);
 
-let currentModel = RIGID_ORIGAMI_MODELS[0];
+let currentModel = CLEAN_ORIGAMI_MODELS[0];
 
 function loadModel(model) {
   currentModel = model;
@@ -67,7 +67,7 @@ sceneManager.onProgressCallback = (step, t) => {
 
 // UI Listeners
 modelSelect.addEventListener('change', (e) => {
-  const selected = RIGID_ORIGAMI_MODELS.find(m => m.id === e.target.value);
+  const selected = CLEAN_ORIGAMI_MODELS.find(m => m.id === e.target.value);
   if (selected) {
     loadModel(selected);
   }
@@ -165,4 +165,4 @@ fileMeshInput.addEventListener('change', (e) => {
 });
 
 // Initial boot
-loadModel(RIGID_ORIGAMI_MODELS[0]);
+loadModel(CLEAN_ORIGAMI_MODELS[0]);
