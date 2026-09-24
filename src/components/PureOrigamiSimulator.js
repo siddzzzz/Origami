@@ -243,12 +243,14 @@ export class PureOrigamiSimulator {
   }
 
   /**
+  /**
    * DIAGONAL HALVES & QUARTERS:
-   * 1 Single 100x100 square paper sheet.
-   * Step 0: 100% Flat square sheet
-   * Step 1: Diagonal half fold along line (-50,-50) to (50,50).
-   * Step 2: The entire folded right wing (both upper and lower paper layers bound together)
-   *         folds over the left wing along the median crease line!
+   * 1 Single continuous square paper sheet (-50 to 50).
+   * 
+   * Geometrically exact multi-layer fold:
+   * Step 0: Flat 100x100 square.
+   * Step 1: Diagonal fold across center line (-s,-s) to (s,s). The lower half folds 180° onto the upper half.
+   * Step 2: Quarter fold across median line (0,0) to (s,-s). The right wing rotates 180° over to the left.
    */
   buildDiagonalHalves() {
     const s = this.half; // 50
@@ -277,33 +279,7 @@ export class PureOrigamiSimulator {
     this.lowerLeftQuarter = this.createFacetMesh(lowerLeftVerts, [0, 1, 2]);
     this.diagHinge.add(this.lowerLeftQuarter);
 
-    // 3. Step 2 Combined Hinge:
-    // When Step 1 completes, the upper-right quarter and lower-right quarter lie FLUSH against each other.
-    // They fold together across the median altitude axis (from (0,0,0) to (s,0,-s)).
-    this.step2CombinedHinge = new THREE.Group();
-    this.altitudeAxis = new THREE.Vector3(1, 0, -1).normalize();
-
-    // Upper-right quarter: (0, 0, 0) -> (s, 0, -s) -> (s, 0, s)
-    const upperRightVerts = [
-      [0, 0, 0],
-      [s, 0, -s],
-      [s, 0, s]
-    ];
-    this.upperRightQuarter = this.createFacetMesh(upperRightVerts, [0, 1, 2]);
-    this.step2CombinedHinge.add(this.upperRightQuarter);
-
-    // Lower-right quarter attached directly inside the hinge so both layers stay 100% bonded
-    // In folded state, this quarter rests directly on top of the upper right quarter:
-    const lowerRightVerts = [
-      [0, 0.05, 0],
-      [s, 0.05, -s],
-      [s, 0.05, s]
-    ];
-    this.lowerRightFoldedQuarter = this.createFacetMesh(lowerRightVerts, [0, 1, 2]);
-    this.lowerRightFoldedQuarter.visible = false; // Becomes visible when step 1 closes
-    this.step2CombinedHinge.add(this.lowerRightFoldedQuarter);
-
-    // Flat version of lower-right quarter (visible only during Step 0 and Step 1 animation)
+    // Flat version of lower-right quarter (attached to diagHinge for Step 0 and Step 1)
     const flatLowerRightVerts = [
       [0, 0, 0],
       [s, 0, s],
@@ -311,6 +287,37 @@ export class PureOrigamiSimulator {
     ];
     this.flatLowerRightQuarter = this.createFacetMesh(flatLowerRightVerts, [0, 1, 2]);
     this.diagHinge.add(this.flatLowerRightQuarter);
+
+    // 3. Step 2 Combined Hinge:
+    // Crease line runs from (0,0,0) to (s,0,-s).
+    // Midpoint of crease is at (s/2, 0, -s/2).
+    // Hinge axis direction: from (0,0,0) to (s,0,-s) -> (1, 0, -1) normalized.
+    this.step2CombinedHinge = new THREE.Group();
+    this.step2CombinedHinge.position.set(s / 2, 0, -s / 2);
+    this.altitudeAxis = new THREE.Vector3(1, 0, -1).normalize();
+
+    // In local space of step2CombinedHinge (offset by (-s/2, 0, s/2)):
+    // Upper-right quarter endpoints:
+    // (0,0,0) in local space is (-s/2, 0, s/2)
+    // (s,0,-s) in local space is (s/2, 0, -s/2)
+    // (s,0,s) in local space is (s/2, 0, s/2)
+    const upperRightLocal = [
+      [-s / 2, 0, s / 2],
+      [s / 2, 0, -s / 2],
+      [s / 2, 0, s / 2]
+    ];
+    this.upperRightQuarter = this.createFacetMesh(upperRightLocal, [0, 1, 2]);
+    this.step2CombinedHinge.add(this.upperRightQuarter);
+
+    // Lower-right folded quarter inside step2CombinedHinge:
+    const lowerRightFoldedLocal = [
+      [-s / 2, 0.04, s / 2],
+      [s / 2, 0.04, -s / 2],
+      [s / 2, 0.04, s / 2]
+    ];
+    this.lowerRightFoldedQuarter = this.createFacetMesh(lowerRightFoldedLocal, [0, 1, 2]);
+    this.lowerRightFoldedQuarter.visible = false;
+    this.step2CombinedHinge.add(this.lowerRightFoldedQuarter);
 
     this.sheetRoot.add(this.step2CombinedHinge);
     this.sheetRoot.add(this.diagHinge);
@@ -324,7 +331,6 @@ export class PureOrigamiSimulator {
     const foldAngle = Math.PI * 0.985;
 
     if (step === 0) {
-      // Step 0: All flat
       this.diagHinge.visible = true;
       this.flatLowerRightQuarter.visible = true;
       this.lowerRightFoldedQuarter.visible = false;
@@ -334,7 +340,6 @@ export class PureOrigamiSimulator {
       this.sheetRoot.position.y = 0.2;
     } 
     else if (step === 1) {
-      // Step 1: Diagonal half fold
       this.diagHinge.visible = true;
       this.flatLowerRightQuarter.visible = true;
       this.lowerRightFoldedQuarter.visible = false;
@@ -344,15 +349,14 @@ export class PureOrigamiSimulator {
       this.sheetRoot.position.y = 0.2 + t * 1.5;
     } 
     else {
-      // Step 2: Diagonal quarter fold
-      // First fold is complete: lower right layer is now on top of upper right layer
+      // Step 2: First fold complete, second fold rotates the right wing over the left around its exact crease axis
       this.diagHinge.visible = true;
       this.flatLowerRightQuarter.visible = false;
-      this.lowerRightFoldedQuarter.visible = true; // Both layers are now fused inside step2CombinedHinge!
+      this.lowerRightFoldedQuarter.visible = true;
 
       this.diagHinge.quaternion.setFromAxisAngle(this.diagAxis, -foldAngle);
 
-      // Rotate both layers together 180 degrees over to the left wing!
+      // Rotate both right-wing layers 180 degrees over to the left
       const qAngle = t * foldAngle;
       this.step2CombinedHinge.quaternion.setFromAxisAngle(this.altitudeAxis, -qAngle);
       this.sheetRoot.position.y = 1.7 + t * 2.0;
