@@ -143,14 +143,14 @@ export class ThreeDSceneManager {
 
   nextStep() {
     if (this.currentStep < this.totalSteps - 1) {
-      this.setStep(this.currentStep + 1, 0);
+      this.setStep(this.currentStep + 1, 1.0);
       if (this.onStepChangeCallback) this.onStepChangeCallback(this.currentStep);
     }
   }
 
   prevStep() {
     if (this.currentStep > 0) {
-      this.setStep(this.currentStep - 1, 0);
+      this.setStep(this.currentStep - 1, 1.0);
       if (this.onStepChangeCallback) this.onStepChangeCallback(this.currentStep);
     }
   }
