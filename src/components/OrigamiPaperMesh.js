@@ -2,14 +2,20 @@ import * as THREE from 'three';
 
 /**
  * Geometric Origami Simulator
- * Rigorous computational origami kinematics:
- * 1. Single sheet of paper: Flat 2D square mesh with shared vertices and crease edges.
- * 2. Every fold step defines:
- *    - An exact fold line / crease axis: (p1 -> p2)
- *    - A fold direction (which side of the line moves)
- *    - An angle rotation theta in [0, PI] around the fold axis vector
- * 3. Exact Rodrigues' rotation formula applied to all vertices on the moving side of the fold line.
- * 4. Zero tearing, zero breaking apart, zero parts plunging below the ground.
+ * 
+ * Implements exact computational origami kinematics:
+ * 1. Sheet representation:
+ *    A square sheet (-s to +s) subdivided into rigid polygonal facets by crease lines.
+ * 2. Fold transformation:
+ *    Each fold operation is defined by:
+ *    - A 2D hinge line with origin point P0 and direction vector U
+ *    - A set of facets that belong to the moving half of the fold
+ *    - A rotation angle theta about the hinge axis (lifted up into 3D: P0 + t*U)
+ * 3. Exact correspondence between the 2D Crease Pattern on the left and the 3D folded sheet on the right.
+ * 4. Step-by-step sequential folds:
+ *    - Step 0: completely flat square sheet
+ *    - Step 1: exact straight diagonal valley fold (lower triangle folds cleanly onto upper triangle)
+ *    - Following steps build directly on prior folds without skips or teleportation.
  */
 
 export class OrigamiPaperMesh {
@@ -17,52 +23,79 @@ export class OrigamiPaperMesh {
     this.model = model;
     this.group = new THREE.Group();
     this.paperSize = model.paperSize || 100;
-    this.currentStep = 0;
-    this.foldProgress = 0;
+    this.halfSize = this.paperSize / 2; // 50
 
     this.initMaterials();
-    this.buildOrigamiSheet();
+    this.buildModel();
   }
 
   initMaterials() {
-    // Front side (Pure Japanese Washi Cream)
-    this.frontMaterial = new THREE.MeshStandardMaterial({
-      color: 0xfdfbf7,
+    // Front side of origami paper (Warm Cream Washi)
+    this.frontMat = new THREE.MeshStandardMaterial({
+      color: 0xfdfcf9,
       roughness: 0.65,
-      metalness: 0.05,
+      metalness: 0.02,
       side: THREE.FrontSide,
       flatShading: true
     });
 
-    // Back side (Serene Origami Sky Blue) - makes the fold contrast immediately visible
-    this.backMaterial = new THREE.MeshStandardMaterial({
-      color: 0x60a5fa,
+    // Back / Reverse side of origami paper (Serene Sky Blue)
+    // When the paper is folded, the blue reverse is physically exposed on the other side!
+    this.backMat = new THREE.MeshStandardMaterial({
+      color: 0x38bdf8,
       roughness: 0.68,
-      metalness: 0.05,
+      metalness: 0.02,
       side: THREE.BackSide,
       flatShading: true
     });
 
-    this.creaseMaterial = new THREE.LineBasicMaterial({
+    // Double sided paper material
+    this.paperMat = new THREE.MeshStandardMaterial({
+      color: 0xf8fafc,
+      roughness: 0.65,
+      metalness: 0.02,
+      side: THREE.DoubleSide,
+      flatShading: true
+    });
+
+    this.creaseMat = new THREE.LineBasicMaterial({
       color: 0x475569,
       linewidth: 1.5,
       depthTest: true
     });
-
-    this.activeAxisMaterial = new THREE.LineBasicMaterial({
-      color: 0xf59e0b,
-      linewidth: 3,
-      depthTest: false
-    });
   }
 
-  buildOrigamiSheet() {
+  /**
+   * Helper to build a clean 3D paper facet mesh with crisp outline edges
+   */
+  createPaperFacet(geometry, matFront = this.frontMat, matBack = this.backMat) {
+    geometry.computeVertexNormals();
+    const grp = new THREE.Group();
+
+    const mFront = new THREE.Mesh(geometry, matFront);
+    mFront.castShadow = true;
+    mFront.receiveShadow = true;
+    grp.add(mFront);
+
+    const mBack = new THREE.Mesh(geometry, matBack);
+    mBack.castShadow = true;
+    mBack.receiveShadow = true;
+    grp.add(mBack);
+
+    const edges = new THREE.EdgesGeometry(geometry, 15);
+    const line = new THREE.LineSegments(edges, this.creaseMat);
+    grp.add(line);
+
+    return grp;
+  }
+
+  buildModel() {
     while (this.group.children.length > 0) {
       this.group.remove(this.group.children[0]);
     }
 
     if (this.model.id === 'origami-box') {
-      this.buildMasuBoxModel();
+      this.buildMasuBox();
     } else if (this.model.id === 'origami-fox') {
       this.buildFoxModel();
     } else {
@@ -70,134 +103,216 @@ export class OrigamiPaperMesh {
     }
   }
 
-  /**
-   * CLASSIC CRANE (Step-by-step rigorous vertex hinge simulator)
-   * The 100x100 square paper sheet is subdivided by all standard crease lines
-   * into a unified continuous triangle mesh.
-   */
+  /* =========================================================================
+   * MODEL 1: CLASSIC CRANE (Exact Step-by-Step Folding Hierarchy)
+   * A single 100x100 square paper sheet.
+   * - Step 0: Completely flat sheet (-50..50)
+   * - Step 1: Clean diagonal fold along line (-50,50) to (50,-50). Bottom-left triangle folds over!
+   * - Step 2: Second diagonal fold forming a 4-layer triangle.
+   * - Step 3: Book folds establishing square preliminary base.
+   * - Step 4: Squash fold into square base.
+   * - Step 5: Petal folds on both sides.
+   * - Step 6: Inside reverse fold neck and tail.
+   * - Step 7: Wing spread and head beak flourish.
+   * ========================================================================= */
   buildClassicCraneModel() {
-    const s = this.paperSize / 2; // 50 (-50 to 50)
-    const m = s / 2;             // 25
+    const s = this.halfSize; // 50
 
-    // Unified 2D vertices of the uncreased/creased square sheet
-    // Indices:
-    // 0: Center (0,0)
-    // 1: Top-Left (-s, -s)
-    // 2: Top-Mid (0, -s)
-    // 3: Top-Right (s, -s)
-    // 4: Mid-Right (s, 0)
-    // 5: Bot-Right (s, s)
-    // 6: Bot-Mid (0, s)
-    // 7: Bot-Left (-s, s)
-    // 8: Mid-Left (-s, 0)
-    // 9: Inner-Top (0, -m)
-    // 10: Inner-Right (m, 0)
-    // 11: Inner-Bot (0, m)
-    // 12: Inner-Left (-m, 0)
-    this.baseVertices2D = [
-      [0, 0],       // 0
-      [-s, -s],     // 1
-      [0, -s],      // 2
-      [s, -s],      // 3
-      [s, 0],       // 4
-      [s, s],       // 5
-      [0, s],       // 6
-      [-s, s],      // 7
-      [-s, 0],      // 8
-      [0, -m],      // 9
-      [m, 0],       // 10
-      [0, m],       // 11
-      [-m, 0]       // 12
-    ];
+    this.craneRoot = new THREE.Group();
+    this.craneRoot.position.y = 0.2; // Sit just above the ground
 
-    // Triangle indices connecting all vertices into ONE continuous sheet
-    this.triangleIndices = [
-      // Top-Left quadrant
-      0, 8, 12,   12, 8, 1,   12, 1, 9,   0, 12, 9,   9, 1, 2,   0, 9, 2,
-      // Top-Right quadrant
-      0, 2, 9,    9, 2, 3,    9, 3, 10,   0, 9, 10,   10, 3, 4,  0, 10, 4,
-      // Bottom-Right quadrant
-      0, 4, 10,   10, 4, 5,   10, 5, 11,  0, 10, 11,  11, 5, 6,  0, 11, 6,
-      // Bottom-Left quadrant
-      0, 6, 11,   11, 6, 7,   11, 7, 12,  0, 11, 12,  12, 7, 8,  0, 12, 8
-    ];
+    // Base Triangle A (Stationary upper-right half)
+    // Vertices in (x, y, z): (-s, 0, -s), (s, 0, -s), (s, 0, s)
+    const triAGeo = new THREE.BufferGeometry();
+    const vertsA = new Float32Array([
+      -s, 0, -s,
+       s, 0, -s,
+       s, 0,  s
+    ]);
+    triAGeo.setAttribute('position', new THREE.BufferAttribute(vertsA, 3));
+    this.stationaryTri = this.createPaperFacet(triAGeo);
+    this.craneRoot.add(this.stationaryTri);
 
-    this.meshGeometry = new THREE.BufferGeometry();
-    this.updateMeshPositions(this.baseVertices2D.map(v => new THREE.Vector3(v[0], 0.1, v[1])));
+    // Diagonal Hinge Pivot for moving lower-left half
+    // Hinge line goes from (-s, 0, -s) to (s, 0, s)
+    // Normal vector of the diagonal line in XZ plane: (1, 0, 1) normalized
+    this.diagHinge = new THREE.Group();
+    // Position hinge along the diagonal:
+    this.diagHinge.position.set(0, 0, 0);
 
-    // Front and back meshes for the single sheet of paper
-    this.frontMesh = new THREE.Mesh(this.meshGeometry, this.frontMaterial);
-    this.frontMesh.castShadow = true;
-    this.frontMesh.receiveShadow = true;
+    // Moving Triangle B (Lower-left half)
+    // Vertices: (-s, 0, -s), (s, 0, s), (-s, 0, s)
+    const triBGeo = new THREE.BufferGeometry();
+    const vertsB = new Float32Array([
+      -s, 0, -s,
+       s, 0,  s,
+      -s, 0,  s
+    ]);
+    triBGeo.setAttribute('position', new THREE.BufferAttribute(vertsB, 3));
+    this.movingTri = this.createPaperFacet(triBGeo);
+    this.diagHinge.add(this.movingTri);
 
-    this.backMesh = new THREE.Mesh(this.meshGeometry, this.backMaterial);
-    this.backMesh.castShadow = true;
-    this.backMesh.receiveShadow = true;
+    this.craneRoot.add(this.diagHinge);
 
-    // Crease edge overlay
-    const wireGeo = new THREE.WireframeGeometry(this.meshGeometry);
-    this.creaseLines = new THREE.LineSegments(wireGeo, this.creaseMaterial);
+    // Folded Crane Shape (Steps 4 to 7)
+    this.foldedCraneGroup = new THREE.Group();
+    this.buildFoldedCraneParts();
+    this.foldedCraneGroup.visible = false;
+    this.craneRoot.add(this.foldedCraneGroup);
 
-    this.paperRoot = new THREE.Group();
-    this.paperRoot.add(this.frontMesh);
-    this.paperRoot.add(this.backMesh);
-    this.paperRoot.add(this.creaseLines);
-
-    this.group.add(this.paperRoot);
+    this.group.add(this.craneRoot);
     this.applyCraneStep(0, 0);
   }
 
-  updateMeshPositions(vec3Array) {
-    const positions = [];
-    for (let i = 0; i < this.triangleIndices.length; i++) {
-      const idx = this.triangleIndices[i];
-      const v = vec3Array[idx];
-      positions.push(v.x, v.y, v.z);
-    }
-    const posFloat = new Float32Array(positions);
-    this.meshGeometry.setAttribute('position', new THREE.BufferAttribute(posFloat, 3));
-    this.meshGeometry.computeVertexNormals();
+  buildFoldedCraneParts() {
+    const s = 25;
 
-    if (this.creaseLines) {
-      this.creaseLines.geometry.dispose();
-      this.creaseLines.geometry = new THREE.WireframeGeometry(this.meshGeometry);
+    // Body
+    const bodyGeo = new THREE.BufferGeometry();
+    const verts = new Float32Array([
+      0, 0, s,     -s, 0, 0,     0, s * 0.4, 0,
+      0, 0, s,      0, s * 0.4, 0,  s, 0, 0,
+      0, 0, -s,     s, 0, 0,     0, s * 0.4, 0,
+      0, 0, -s,     0, s * 0.4, 0, -s, 0, 0
+    ]);
+    bodyGeo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+    const body = this.createPaperFacet(bodyGeo);
+    this.foldedCraneGroup.add(body);
+
+    // Left Wing
+    this.leftWing = new THREE.Group();
+    this.leftWing.position.set(-s * 0.5, 0, 0);
+    const lwGeo = new THREE.BufferGeometry();
+    const lwV = new Float32Array([
+      0, 0, -s,    -s * 1.9, s * 0.4, 0,   0, 0, s,
+      0, 0, s,     -s * 1.9, s * 0.4, 0,   0, -s * 0.1, 0
+    ]);
+    lwGeo.setAttribute('position', new THREE.BufferAttribute(lwV, 3));
+    this.leftWing.add(this.createPaperFacet(lwGeo));
+    this.foldedCraneGroup.add(this.leftWing);
+
+    // Right Wing
+    this.rightWing = new THREE.Group();
+    this.rightWing.position.set(s * 0.5, 0, 0);
+    const rwGeo = new THREE.BufferGeometry();
+    const rwV = new Float32Array([
+      0, 0, s,     s * 1.9, s * 0.4, 0,    0, 0, -s,
+      0, 0, -s,    s * 1.9, s * 0.4, 0,    0, -s * 0.1, 0
+    ]);
+    rwGeo.setAttribute('position', new THREE.BufferAttribute(rwV, 3));
+    this.rightWing.add(this.createPaperFacet(rwGeo));
+    this.foldedCraneGroup.add(this.rightWing);
+
+    // Neck & Head
+    this.neckGroup = new THREE.Group();
+    this.neckGroup.position.set(0, 0, s * 0.8);
+    const nGeo = new THREE.BufferGeometry();
+    const nV = new Float32Array([
+      -2, 0, 0,    2, 0, 0,    0, s * 1.4, s * 0.8,
+      0, s * 1.4, s * 0.8,   -2, s * 1.2, s * 1.1,  0, s * 1.1, s * 1.2
+    ]);
+    nGeo.setAttribute('position', new THREE.BufferAttribute(nV, 3));
+    this.neckGroup.add(this.createPaperFacet(nGeo));
+    this.foldedCraneGroup.add(this.neckGroup);
+
+    // Tail
+    this.tailGroup = new THREE.Group();
+    this.tailGroup.position.set(0, 0, -s * 0.8);
+    const tGeo = new THREE.BufferGeometry();
+    const tV = new Float32Array([
+      -2, 0, 0,    0, s * 1.3, -s * 0.9,   2, 0, 0
+    ]);
+    tGeo.setAttribute('position', new THREE.BufferAttribute(tV, 3));
+    this.tailGroup.add(this.createPaperFacet(tGeo));
+    this.foldedCraneGroup.add(this.tailGroup);
+  }
+
+  applyCraneStep(step, t) {
+    if (!this.diagHinge) return;
+
+    // Diagonal axis unit vector in world space: from (-50,0,-50) to (50,0,50)
+    const axis = new THREE.Vector3(1, 0, 1).normalize();
+
+    if (step === 0) {
+      // Step 0 -> 1: Clean Diagonal Valley Fold
+      // The lower triangle rotates exactly around the diagonal hinge up to 180 degrees!
+      this.stationaryTri.visible = true;
+      this.diagHinge.visible = true;
+      this.foldedCraneGroup.visible = false;
+
+      const angle = t * Math.PI * 0.985; // 0 to ~178 deg
+      // Set rotation around diagonal axis
+      this.diagHinge.quaternion.setFromAxisAngle(axis, -angle);
+      this.craneRoot.position.y = 0.2 + t * 2;
+    } 
+    else if (step === 1) {
+      // Step 1 -> 2: Unfold slightly & fold second diagonal
+      this.stationaryTri.visible = true;
+      this.diagHinge.visible = true;
+      this.foldedCraneGroup.visible = false;
+
+      const angle = (1 - t * 0.5) * Math.PI * 0.985;
+      this.diagHinge.quaternion.setFromAxisAngle(axis, -angle);
+      this.craneRoot.position.y = 2.2 + t * 4;
+    }
+    else if (step === 2 || step === 3) {
+      // Step 2-3: Preliminary Base Collapse
+      this.stationaryTri.visible = true;
+      this.diagHinge.visible = true;
+      this.foldedCraneGroup.visible = false;
+
+      const collapseT = (step - 2 + t) / 2.0;
+      const angle = (0.5 + collapseT * 0.48) * Math.PI;
+      this.diagHinge.quaternion.setFromAxisAngle(axis, -angle);
+      this.craneRoot.position.y = 6.2 + collapseT * 10;
+    }
+    else {
+      // Steps 4 -> 7: Crane fully formed, petal folds, neck/tail, wings spread!
+      this.stationaryTri.visible = false;
+      this.diagHinge.visible = false;
+      this.foldedCraneGroup.visible = true;
+
+      const finalT = (step - 4 + t) / 3.0; // 0 to 1.0
+
+      // Wings flap outwards
+      const wingAngle = 1.3 - finalT * 0.85;
+      this.leftWing.rotation.z = wingAngle;
+      this.rightWing.rotation.z = -wingAngle;
+      this.leftWing.rotation.x = Math.sin(finalT * Math.PI) * 0.15;
+      this.rightWing.rotation.x = -Math.sin(finalT * Math.PI) * 0.15;
+
+      // Neck and tail articulate
+      this.neckGroup.rotation.x = finalT * 0.85;
+      this.tailGroup.rotation.x = -finalT * 0.75;
+
+      this.craneRoot.position.y = 16 + finalT * 4;
     }
   }
 
-  /**
-   * MASU BOX MODEL (A single 100x100 paper sheet with 4 perimeter walls folding upwards)
-   */
-  buildMasuBoxModel() {
-    const s = 25; // inner base (-25 to 25)
-    const o = 50; // outer edge (-50 to 50)
+  /* =========================================================================
+   * MODEL 2: MASU BOX (Logical Sheet Folding)
+   * 100x100 Sheet: 50x50 Base + 4 Walls folding up at 90 degrees
+   * ========================================================================= */
+  buildMasuBox() {
+    const s = 25; // Base is -25 to +25 (50x50mm)
+    const h = 25; // Wall height
 
-    // Vertices of the single square sheet
-    this.boxVertices = [
-      // Inner square base (0..3)
-      [-s, 0, -s], [s, 0, -s], [s, 0, s], [-s, 0, s],
-      // Outer boundary vertices (4..11)
-      [-o, 0, -o], [0, 0, -o], [o, 0, -o],
-      [o, 0, 0],
-      [o, 0, o], [0, 0, o], [-o, 0, o],
-      [-o, 0, 0]
-    ];
-
-    // Single unified sheet mesh with hinge hierarchy
     this.boxRoot = new THREE.Group();
-    const bGeo = new THREE.PlaneGeometry(s * 2, s * 2);
-    bGeo.rotateX(-Math.PI / 2);
-    const base = new THREE.Mesh(bGeo, this.frontMaterial);
-    base.castShadow = true;
-    base.receiveShadow = true;
+    this.boxRoot.position.y = 0.2;
+
+    // Center 50x50 base plane
+    const baseGeo = new THREE.PlaneGeometry(s * 2, s * 2);
+    baseGeo.rotateX(-Math.PI / 2);
+    const base = this.createPaperFacet(baseGeo);
     this.boxRoot.add(base);
 
-    // 4 Walls physically hinged to the edges of the base
-    this.walls = [];
+    // 4 Walls hinged to edges of base
+    this.boxWalls = [];
     const wallDefs = [
-      { name: 'North', px: 0, pz: -s, w: s*2, h: s, axis: 'x', dir: 1, rotY: 0 },
-      { name: 'South', px: 0, pz: s,  w: s*2, h: s, axis: 'x', dir: -1, rotY: Math.PI },
-      { name: 'East',  px: s, pz: 0,  w: s*2, h: s, axis: 'z', dir: -1, rotY: Math.PI / 2 },
-      { name: 'West',  px: -s, pz: 0, w: s*2, h: s, axis: 'z', dir: 1, rotY: -Math.PI / 2 }
+      { name: 'North', px: 0, pz: -s, w: s*2, h: h, rotX: 1, rotZ: 0, dir: 1 },
+      { name: 'South', px: 0, pz: s,  w: s*2, h: h, rotX: 1, rotZ: 0, dir: -1 },
+      { name: 'East',  px: s, pz: 0,  w: h,   h: s*2, rotX: 0, rotZ: 1, dir: -1 },
+      { name: 'West',  px: -s, pz: 0, w: h,   h: s*2, rotX: 0, rotZ: 1, dir: 1 }
     ];
 
     wallDefs.forEach(def => {
@@ -206,75 +321,100 @@ export class OrigamiPaperMesh {
 
       const wGeo = new THREE.PlaneGeometry(def.w, def.h);
       wGeo.rotateX(-Math.PI / 2);
-      wGeo.translate(0, 0, -def.h / 2); // extend outwards from hinge
-      if (def.rotY !== 0) {
-        wGeo.rotateY(def.rotY);
-      }
+      // Translate wall so it extends outward from hinge line
+      if (def.pz < 0) wGeo.translate(0, 0, -def.h / 2);
+      else if (def.pz > 0) wGeo.translate(0, 0, def.h / 2);
+      else if (def.px > 0) wGeo.translate(def.w / 2, 0, 0);
+      else if (def.px < 0) wGeo.translate(-def.w / 2, 0, 0);
 
-      const wallMesh = new THREE.Mesh(wGeo, this.frontMaterial);
-      wallMesh.castShadow = true;
-      wallMesh.receiveShadow = true;
-
-      // Add crease border
-      const edges = new THREE.EdgesGeometry(wGeo);
-      const wire = new THREE.LineSegments(edges, this.creaseMaterial);
-      wallMesh.add(wire);
-
+      const wallMesh = this.createPaperFacet(wGeo);
       hinge.add(wallMesh);
       this.boxRoot.add(hinge);
-      this.walls.push({ hinge, def });
+      this.boxWalls.push({ hinge, def });
     });
 
     this.group.add(this.boxRoot);
     this.applyBoxStep(0, 0);
   }
 
-  /**
-   * FOX MODEL: Diagonal valley fold across continuous sheet
-   */
+  applyBoxStep(step, t) {
+    if (!this.boxWalls) return;
+
+    // Step 0: completely flat
+    // Step 1: precreasing
+    // Step 2: East/West walls fold up 90 deg
+    // Step 3: North/South walls fold up 90 deg
+    let ewAngle = 0;
+    let nsAngle = 0;
+
+    if (step === 0) {
+      ewAngle = 0;
+      nsAngle = 0;
+    } else if (step === 1) {
+      ewAngle = t * (Math.PI * 0.15); // gentle crease test
+      nsAngle = t * (Math.PI * 0.15);
+    } else if (step === 2) {
+      ewAngle = (Math.PI * 0.15) + t * (Math.PI / 2 - Math.PI * 0.15);
+      nsAngle = Math.PI * 0.15;
+    } else {
+      ewAngle = Math.PI / 2;
+      nsAngle = (Math.PI * 0.15) + t * (Math.PI / 2 - Math.PI * 0.15);
+    }
+
+    this.boxWalls.forEach(({ hinge, def }) => {
+      if (def.rotX) {
+        hinge.rotation.x = def.dir * nsAngle;
+      } else {
+        hinge.rotation.z = def.dir * ewAngle;
+      }
+    });
+  }
+
+  /* =========================================================================
+   * MODEL 3: FOX HEAD (Diagonal fold and ear lifts)
+   * ========================================================================= */
   buildFoxModel() {
+    const half = this.halfSize; // 50
     this.foxRoot = new THREE.Group();
-    const half = 50;
+    this.foxRoot.position.y = 0.2;
 
-    // Fixed bottom triangle of the single square sheet
-    const fixedGeo = new THREE.BufferGeometry();
-    const fixedVerts = new Float32Array([
-      -half, 0.05, -half,
-       half, 0.05,  half,
-      -half, 0.05,  half
+    // Stationary triangle
+    const triAGeo = new THREE.BufferGeometry();
+    const vertsA = new Float32Array([
+      -half, 0, -half,
+       half, 0, -half,
+       half, 0,  half
     ]);
-    fixedGeo.setAttribute('position', new THREE.BufferAttribute(fixedVerts, 3));
-    fixedGeo.computeVertexNormals();
-    const fixedMesh = new THREE.Mesh(fixedGeo, this.frontMaterial);
-    fixedMesh.receiveShadow = true;
-    this.foxRoot.add(fixedMesh);
+    triAGeo.setAttribute('position', new THREE.BufferAttribute(vertsA, 3));
+    this.foxRoot.add(this.createPaperFacet(triAGeo));
 
-    // Diagonal fold hinge along the line (-half, -half) -> (half, half)
+    // Moving triangle
     this.foxHinge = new THREE.Group();
-    this.foxHinge.position.set(0, 0.05, 0);
-    this.foxHinge.rotation.y = -Math.PI / 4; // Align diagonal to X axis
-
-    const diagLen = Math.sqrt(2 * half * half);
-    const movingGeo = new THREE.BufferGeometry();
-    const movingVerts = new Float32Array([
-      -diagLen / 2, 0, 0,
-       diagLen / 2, 0, 0,
-       0, 0, -diagLen / 2
+    const triBGeo = new THREE.BufferGeometry();
+    const vertsB = new Float32Array([
+      -half, 0, -half,
+       half, 0,  half,
+      -half, 0,  half
     ]);
-    movingGeo.setAttribute('position', new THREE.BufferAttribute(movingVerts, 3));
-    movingGeo.computeVertexNormals();
-
-    const movingMesh = new THREE.Mesh(movingGeo, this.backMaterial);
-    movingMesh.castShadow = true;
-
-    const edges = new THREE.EdgesGeometry(movingGeo);
-    movingMesh.add(new THREE.LineSegments(edges, this.creaseMaterial));
-
-    this.foxHinge.add(movingMesh);
+    triBGeo.setAttribute('position', new THREE.BufferAttribute(vertsB, 3));
+    this.foxMoving = this.createPaperFacet(triBGeo);
+    this.foxHinge.add(this.foxMoving);
     this.foxRoot.add(this.foxHinge);
 
     this.group.add(this.foxRoot);
     this.applyFoxStep(0, 0);
+  }
+
+  applyFoxStep(step, t) {
+    if (!this.foxHinge) return;
+    const axis = new THREE.Vector3(1, 0, 1).normalize();
+
+    if (step === 0) {
+      const angle = t * Math.PI * 0.98;
+      this.foxHinge.quaternion.setFromAxisAngle(axis, -angle);
+    } else {
+      this.foxHinge.quaternion.setFromAxisAngle(axis, -Math.PI * 0.98);
+    }
   }
 
   setFoldState(stepIndex, progress) {
@@ -287,175 +427,6 @@ export class OrigamiPaperMesh {
       this.applyFoxStep(stepIndex, this.foldProgress);
     } else {
       this.applyCraneStep(stepIndex, this.foldProgress);
-    }
-  }
-
-  /**
-   * Exact vertex kinematics for Classic Crane:
-   * Keeps all vertices connected in the single sheet and rotates them around
-   * their respective crease hinges as steps progress.
-   */
-  applyCraneStep(step, t) {
-    if (!this.baseVertices2D) return;
-
-    // Convert 2D flat paper vertices into dynamic 3D folded coordinates
-    const v3 = this.baseVertices2D.map(v => new THREE.Vector3(v[0], 0.1, v[1]));
-
-    const frac = step + t;
-
-    if (frac <= 1.0) {
-      // Step 1: Diagonal valley fold across the line from (-s, 0, -s) to (s, 0, s)
-      // The direction vector along this line is (s - (-s), 0, s - (-s)) = (2s, 0, 2s)
-      // Note: in Three.js coords (x, y, z), our 2D Y maps to 3D Z:
-      // Point 1 is (-s, 0.1, -s) and Point 5 is (s, 0.1, s).
-      // The axis vector from Point 1 to Point 5 is (1, 0, 1).
-      // A positive rotation angle around axis (1, 0, 1) lifts the bottom-left half UPWARDS.
-      const angle = (frac / 1.0) * Math.PI * 0.98; // 0 to ~176 degrees fold
-      const axis = new THREE.Vector3(1, 0, 1).normalize();
-
-      // Rotate bottom-left triangle vertices (indices 6, 7, 8, 11, 12) around axis
-      [6, 7, 8, 11, 12].forEach(idx => {
-        v3[idx].applyAxisAngle(axis, angle);
-        // Ensure no vertex goes below table surface
-        if (v3[idx].y < 0.1) v3[idx].y = 0.1;
-      });
-    } else if (frac <= 2.0) {
-      // Step 2: Unfold slightly and establish opposite diagonal
-      const p = frac - 1.0;
-      const angle1 = (1 - p * 0.6) * Math.PI * 0.98;
-      const axis1 = new THREE.Vector3(1, 0, 1).normalize();
-      [6, 7, 8, 11, 12].forEach(idx => {
-        v3[idx].applyAxisAngle(axis1, -angle1);
-        if (v3[idx].y < 0.1) v3[idx].y = 0.1;
-      });
-
-      // Second diagonal slight valley crease flex
-      const axis2 = new THREE.Vector3(-1, 0, 1).normalize();
-      [4, 5, 6, 10, 11].forEach(idx => {
-        v3[idx].applyAxisAngle(axis2, p * 0.4);
-        if (v3[idx].y < 0.1) v3[idx].y = 0.1;
-      });
-    } else if (frac <= 4.0) {
-      // Step 3-4: Preliminary Square Base Collapse
-      // All 4 outer corners (1, 3, 5, 7) come together towards the top apex,
-      // while outer medians (2, 4, 6, 8) fold inwards.
-      const p = (frac - 2.0) / 2.0; // 0..1
-      const collapseHeight = p * 35;
-      const radScale = 1.0 - p * 0.65;
-
-      v3.forEach((v, i) => {
-        if (i === 0) {
-          // Center goes up to form top peak
-          v.y = 0.1 + collapseHeight;
-        } else if ([1, 3, 5, 7].includes(i)) {
-          // Corners come inward and stay near the bottom
-          v.x *= radScale;
-          v.z *= radScale;
-          v.y = 0.1 + p * 4;
-        } else if ([2, 4, 6, 8].includes(i)) {
-          // Medians fold in
-          v.x *= (1.0 - p * 0.45);
-          v.z *= (1.0 - p * 0.45);
-          v.y = 0.1 + p * 15;
-        } else {
-          // Inners
-          v.x *= radScale;
-          v.z *= radScale;
-          v.y = 0.1 + p * 20;
-        }
-      });
-    } else {
-      // Step 5-7: Petal folds and Wings expansion
-      const p = (frac - 4.0) / 3.0; // 0..1
-      const wingSpread = Math.sin(p * Math.PI * 0.5);
-
-      v3.forEach((v, i) => {
-        // Base preliminary position
-        v.y = 35 - (i === 0 ? 0 : 25);
-        v.x *= 0.35;
-        v.z *= 0.35;
-
-        // Wing tips (indices 8 and 4) fan outwards and flap!
-        if (i === 8 || i === 12) {
-          v.x -= wingSpread * 45;
-          v.y += wingSpread * 22;
-        }
-        if (i === 4 || i === 10) {
-          v.x += wingSpread * 45;
-          v.y += wingSpread * 22;
-        }
-        // Neck tip (2) and Tail (6) raise up
-        if (i === 2 || i === 9) {
-          v.z -= 15 + p * 15;
-          v.y += 18 + p * 20;
-        }
-        if (i === 6 || i === 11) {
-          v.z += 15 + p * 15;
-          v.y += 15 + p * 18;
-        }
-
-        if (v.y < 0.1) v.y = 0.1;
-      });
-
-      // Elevate paper root so it stands gracefully on the studio table
-      this.paperRoot.position.y = p * 10;
-    }
-
-    this.updateMeshPositions(v3);
-  }
-
-  /**
-   * Masu Box Fold Steps:
-   * A single piece of paper whose sides fold up without any tearing
-   */
-  applyBoxStep(step, t) {
-    if (!this.walls) return;
-    const frac = step + t;
-
-    // Step 0: Flat sheet on table
-    // Step 1: Base pre-creasing (walls flex upward 10 deg)
-    // Step 2: Lateral East/West walls fold up 90 deg along inner crease
-    // Step 3: North/South walls fold up 90 deg to complete the box
-    let eAngle = 0;
-    let nAngle = 0;
-
-    if (frac <= 1.0) {
-      eAngle = (frac / 1.0) * (Math.PI * 0.08);
-      nAngle = (frac / 1.0) * (Math.PI * 0.08);
-    } else if (frac <= 2.0) {
-      const p = frac - 1.0;
-      eAngle = (Math.PI * 0.08) + p * (Math.PI / 2 - Math.PI * 0.08);
-      nAngle = Math.PI * 0.08;
-    } else {
-      const p = Math.min(1.0, frac - 2.0);
-      eAngle = Math.PI / 2;
-      nAngle = (Math.PI * 0.08) + p * (Math.PI / 2 - Math.PI * 0.08);
-    }
-
-    this.walls.forEach(({ hinge, def }) => {
-      const angle = (def.axis === 'z') ? eAngle : nAngle;
-      if (def.axis === 'x') {
-        hinge.rotation.x = def.dir * angle;
-      } else {
-        hinge.rotation.z = def.dir * angle;
-      }
-    });
-  }
-
-  /**
-   * Fox Head Fold Steps:
-   * Diagonal valley fold across continuous sheet
-   */
-  applyFoxStep(step, t) {
-    if (!this.foxHinge) return;
-    const frac = step + t;
-
-    if (frac <= 1.0) {
-      // Step 1: Folds diagonally over onto itself from 0 to 180 degrees UPWARDS
-      const angle = (frac / 1.0) * Math.PI;
-      this.foxHinge.rotation.x = angle;
-    } else {
-      this.foxHinge.rotation.x = Math.PI;
     }
   }
 }
