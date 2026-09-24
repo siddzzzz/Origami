@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OrigamiAI — 3D Origami Folding Engine & Crease Pattern Generator</title>
+    <meta name="description" content="Computational 3D Origami folding pipeline, real-time folding animation, and interactive crease pattern vector exporter." />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/src/styles/main.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- HEADER -->
+      <header class="app-header">
+        <div class="brand-section">
+          <div class="brand-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 2 22 22 22 12 2" />
+              <line x1="12" y1="2" x2="12" y2="22" stroke-dasharray="2 2" />
+            </svg>
+          </div>
+          <span class="brand-title">OrigamiAI</span>
+          <span class="brand-badge">Engine v0.1</span>
+        </div>
+
+        <div class="header-actions">
+          <div class="model-selector-wrapper">
+            <span>Model:</span>
+            <select id="model-select" class="app-select">
+              <option value="crane-classic">Classic Crane (Tsuru)</option>
+              <option value="origami-box">Traditional Masu Box</option>
+              <option value="origami-fox">Geometric Fox Head</option>
+            </select>
+          </div>
+
+          <button id="btn-import-mesh" class="tool-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            Import 3D Target (.OBJ)
+          </button>
+        </div>
+      </header>
+
+      <!-- SPLIT WORKSPACE: 2D CREASE PATTERN vs 3D FOLD SIMULATION -->
+      <main class="workspace-split">
+        <!-- LEFT: 2D CREASE PATTERN -->
+        <section class="viewport-panel">
+          <div class="panel-header">
+            <span class="panel-title">2D Crease Pattern (Crease Lines)</span>
+            <span class="legend-tag"><span class="legend-dot mountain"></span> Mountain Fold</span>
+            <span class="legend-tag"><span class="legend-dot valley"></span> Valley Fold</span>
+          </div>
+
+          <div class="panel-tools-topright">
+            <button id="btn-export-svg" class="tool-btn" title="Download printable vector crease pattern">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Export SVG
+            </button>
+            <button id="btn-reset-2d" class="tool-btn" title="Reset Crease Pan & Zoom">Reset View</button>
+          </div>
+
+          <div class="canvas-container">
+            <canvas id="crease-canvas"></canvas>
+          </div>
+        </section>
+
+        <!-- RIGHT: 3D INTERACTIVE FOLD SIMULATION -->
+        <section class="viewport-panel">
+          <div class="panel-header">
+            <span class="panel-title">3D Folded Simulation</span>
+          </div>
+
+          <div class="panel-tools-topright">
+            <button id="btn-reset-3d" class="tool-btn" title="Reset 3D Camera">Reset Orbit</button>
+          </div>
+
+          <div id="three-container" class="canvas-container"></div>
+
+          <!-- ACTIVE STEP INSTRUCTION BANNER -->
+          <div class="step-banner">
+            <div class="step-info-col">
+              <div class="step-count" id="step-counter">Step 1 of 8</div>
+              <div class="step-title" id="step-title">Initial Flat Sheet</div>
+              <div class="step-instruction" id="step-instruction">
+                Start with a square sheet of paper, colored side facing down.
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- BOTTOM STEP-BY-STEP CONTROLLER -->
+      <footer class="app-controls">
+        <div class="controls-left">
+          <button id="btn-prev-step" class="ctrl-btn" title="Previous Step">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            Prev Step
+          </button>
+          <button id="btn-play-pause" class="ctrl-btn primary" title="Play or Pause Step-by-Step Animation">
+            <svg id="play-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            <span id="play-btn-text">Animate Fold</span>
+          </button>
+          <button id="btn-next-step" class="ctrl-btn" title="Next Step">
+            Next Step
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="controls-center">
+          <span style="font-size: 11px; font-family: var(--font-mono); color: var(--text-secondary);">Progress</span>
+          <div class="timeline-slider-container">
+            <input type="range" id="step-slider" class="fold-timeline" min="0" max="7" step="0.01" value="0" />
+          </div>
+          <span id="progress-percent" style="font-size: 11px; font-family: var(--font-mono); color: var(--text-primary); min-width: 42px;">0%</span>
+        </div>
+
+        <div class="controls-right">
+          <div class="model-selector-wrapper">
+            <span style="font-size: 12px;">Speed:</span>
+            <select id="speed-select" class="app-select speed-select">
+              <option value="0.5">0.5x</option>
+              <option value="1.0" selected>1.0x</option>
+              <option value="1.5">1.5x</option>
+              <option value="2.0">2.0x</option>
+            </select>
+          </div>
+        </div>
+      </footer>
+
+      <!-- IMPORT 3D TARGET / AI PIPELINE MODAL -->
+      <div id="modal-import" class="modal-backdrop hidden">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3 class="modal-title">3D Mesh to Origami Fold Solver</h3>
+            <button id="btn-close-modal" class="close-btn">&times;</button>
+          </div>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+            Feed a 3D target shape (OBJ / STL). The computational solver abstracts the surface hull into developable faceted planes and computes the optimal fold lines.
+          </p>
+
+          <div class="upload-dropzone" id="dropzone">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" style="margin-bottom: 8px;">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <div style="font-weight: 500; font-size: 14px; margin-bottom: 4px;">Drag & Drop 3D Model (.OBJ)</div>
+            <div style="font-size: 12px; color: var(--text-secondary);">or click to browse from device</div>
+            <input type="file" id="file-mesh-input" accept=".obj" style="display: none;" />
+          </div>
+
+          <div style="background: var(--bg-primary); border-radius: var(--radius-sm); padding: 12px; font-size: 12px; color: var(--text-secondary); font-family: var(--font-mono);">
+            💡 Pipeline: 3D Hull Analysis &rarr; Stick Skeleton &rarr; Circle-Packing / Crease Pattern &rarr; Step Fold Simulator
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
