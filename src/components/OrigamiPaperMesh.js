@@ -304,15 +304,19 @@ export class OrigamiPaperMesh {
     const frac = step + t;
 
     if (frac <= 1.0) {
-      // Step 1: Diagonal valley fold across the line from (-s, -s) to (s, s)
-      // The bottom-left triangle vertices (indices 6, 7, 8, 11, 12) fold UPWARDS around diagonal axis
+      // Step 1: Diagonal valley fold across the line from (-s, 0, -s) to (s, 0, s)
+      // The direction vector along this line is (s - (-s), 0, s - (-s)) = (2s, 0, 2s)
+      // Note: in Three.js coords (x, y, z), our 2D Y maps to 3D Z:
+      // Point 1 is (-s, 0.1, -s) and Point 5 is (s, 0.1, s).
+      // The axis vector from Point 1 to Point 5 is (1, 0, 1).
+      // A positive rotation angle around axis (1, 0, 1) lifts the bottom-left half UPWARDS.
       const angle = (frac / 1.0) * Math.PI * 0.98; // 0 to ~176 degrees fold
-      const axis = new THREE.Vector3(1, 0, 1).normalize(); // Diagonal axis line
+      const axis = new THREE.Vector3(1, 0, 1).normalize();
 
-      // Rotate bottom-left vertices around axis
+      // Rotate bottom-left triangle vertices (indices 6, 7, 8, 11, 12) around axis
       [6, 7, 8, 11, 12].forEach(idx => {
-        v3[idx].applyAxisAngle(axis, -angle);
-        // Ensure no vertex clips below the table
+        v3[idx].applyAxisAngle(axis, angle);
+        // Ensure no vertex goes below table surface
         if (v3[idx].y < 0.1) v3[idx].y = 0.1;
       });
     } else if (frac <= 2.0) {
