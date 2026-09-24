@@ -243,49 +243,104 @@ export class PureOrigamiSimulator {
   }
 
   /**
-   * DIAGONAL HALVES:
-   * Single sheet folded across diagonal, then folded in half again.
+   * DIAGONAL HALVES & QUARTERS:
+   * 1 Single 100x100 square paper sheet.
+   * Step 0: 100% Flat square sheet
+   * Step 1: Diagonal half fold along line (-50,-50) to (50,50). Lower-left half folds over upper-right!
+   * Step 2: Diagonal quarter fold along altitude line from (0,0) to (50,-50). The right corner folds over the left corner to form a neat 45-degree triangle!
    */
   buildDiagonalHalves() {
     const s = this.half; // 50
     this.sheetRoot = new THREE.Group();
     this.sheetRoot.position.y = 0.2;
 
-    // Stationary half (upper-right): (-s, -s) -> (s, -s) -> (s, s)
-    const upperVerts = [
+    // The upper-right triangle (-s,-s) -> (s,-s) -> (s,s) is split into two quarter triangles:
+    // 1. Stationary Left Quarter Triangle: (-s, -s) -> (0, 0) -> (s, -s)
+    const upperLeftVerts = [
       [-s, 0, -s],
-      [s, 0, -s],
-      [s, 0, s]
+      [0, 0, 0],
+      [s, 0, -s]
     ];
-    this.stationaryHalf = this.createFacetMesh(upperVerts, [0, 1, 2]);
-    this.sheetRoot.add(this.stationaryHalf);
+    this.stationaryQuarter = this.createFacetMesh(upperLeftVerts, [0, 1, 2]);
+    this.sheetRoot.add(this.stationaryQuarter);
 
-    // Diagonal Hinge from (-s, 0, -s) to (s, 0, s)
+    // 2. Main Diagonal Hinge (Axis: from (-s, 0, -s) to (s, 0, s))
     this.diagHinge = new THREE.Group();
     this.diagAxis = new THREE.Vector3(1, 0, 1).normalize();
 
-    // Moving half: (-s, 0, -s) -> (s, 0, s) -> (-s, 0, s)
-    const lowerVerts = [
+    // The moving lower half (-s,-s) -> (s,s) -> (-s,s) is also split along the altitude:
+    // Quarter A (Fixed to diag hinge): (-s, -s) -> (0, 0) -> (-s, s)
+    const lowerLeftVerts = [
       [-s, 0, -s],
+      [0, 0, 0],
+      [-s, 0, s]
+    ];
+    this.movingQuarterA = this.createFacetMesh(lowerLeftVerts, [0, 1, 2]);
+    this.diagHinge.add(this.movingQuarterA);
+
+    // Quarter B (Right wing of lower half): (0, 0) -> (s, s) -> (-s, s)
+    // This folds along the altitude in Step 2!
+    // Altitude axis: from (0, 0, 0) to (s, 0, -s) in unfolded coords = (1, 0, -1) normalized
+    this.secondHingeLower = new THREE.Group();
+    const lowerRightVerts = [
+      [0, 0, 0],
       [s, 0, s],
       [-s, 0, s]
     ];
-    this.movingHalf = this.createFacetMesh(lowerVerts, [0, 1, 2]);
-    this.diagHinge.add(this.movingHalf);
-    this.sheetRoot.add(this.diagHinge);
+    this.movingQuarterB = this.createFacetMesh(lowerRightVerts, [0, 1, 2]);
+    this.secondHingeLower.add(this.movingQuarterB);
+    this.diagHinge.add(this.secondHingeLower);
 
+    // 3. Stationary Upper Right Quarter (folds in step 2 alongside the bottom layer):
+    // Vertices: (0, 0, 0) -> (s, 0, -s) -> (s, 0, s)
+    // Hinge axis: from (0, 0, 0) to (s, 0, -s) -> direction (1, 0, -1)
+    this.secondHingeUpper = new THREE.Group();
+    this.secondAxis = new THREE.Vector3(1, 0, -1).normalize();
+
+    const upperRightVerts = [
+      [0, 0, 0],
+      [s, 0, -s],
+      [s, 0, s]
+    ];
+    this.upperRightQuarter = this.createFacetMesh(upperRightVerts, [0, 1, 2]);
+    this.secondHingeUpper.add(this.upperRightQuarter);
+    this.sheetRoot.add(this.secondHingeUpper);
+
+    this.sheetRoot.add(this.diagHinge);
     this.group.add(this.sheetRoot);
     this.updateDiagonalHalves(0, 0);
   }
 
   updateDiagonalHalves(step, t) {
-    if (!this.diagHinge) return;
+    if (!this.diagHinge || !this.secondHingeUpper) return;
+
+    const foldAngle = Math.PI * 0.985;
 
     if (step === 0) {
+      // Step 0: All flat
       this.diagHinge.quaternion.setFromAxisAngle(this.diagAxis, 0);
-    } else {
-      const angle = (step === 1 ? t : 1.0) * Math.PI * 0.985;
-      this.diagHinge.quaternion.setFromAxisAngle(this.diagAxis, -angle);
+      this.secondHingeUpper.quaternion.setFromAxisAngle(this.secondAxis, 0);
+      this.secondHingeLower.quaternion.setFromAxisAngle(this.secondAxis, 0);
+      this.sheetRoot.position.y = 0.2;
+    } 
+    else if (step === 1) {
+      // Step 1: Diagonal half fold
+      // Lower half folds 180 degrees over the upper half
+      this.diagHinge.quaternion.setFromAxisAngle(this.diagAxis, -t * foldAngle);
+      this.secondHingeUpper.quaternion.setFromAxisAngle(this.secondAxis, 0);
+      this.secondHingeLower.quaternion.setFromAxisAngle(this.secondAxis, 0);
+      this.sheetRoot.position.y = 0.2 + t * 1.5;
+    } 
+    else {
+      // Step 2: Diagonal quarter fold
+      // First fold remains 100% closed (180 deg)
+      this.diagHinge.quaternion.setFromAxisAngle(this.diagAxis, -foldAngle);
+
+      // Now both layers of the right half fold together across the median altitude axis to meet the left corner!
+      const qAngle = t * foldAngle;
+      this.secondHingeUpper.quaternion.setFromAxisAngle(this.secondAxis, -qAngle);
+      this.secondHingeLower.quaternion.setFromAxisAngle(this.secondAxis, -qAngle);
+      this.sheetRoot.position.y = 1.7 + t * 2.0;
     }
   }
 
