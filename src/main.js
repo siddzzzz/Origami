@@ -1,5 +1,7 @@
 import { CLEAN_ORIGAMI_MODELS } from './data/cleanOrigamiModels.js';
 import { CreasePatternViewer } from './components/CreasePatternViewer.js';
+import { MeshSkeletonizer } from './algorithms/MeshSkeletonizer.js';
+import { OrigamiUniversalSolver } from './algorithms/OrigamiUniversalSolver.js';
 
 // DOM elements
 const modelSelect = document.getElementById('model-select');
@@ -20,6 +22,7 @@ const modalImport = document.getElementById('modal-import');
 const btnCloseModal = document.getElementById('btn-close-modal');
 const dropzone = document.getElementById('dropzone');
 const fileMeshInput = document.getElementById('file-mesh-input');
+const presetButtons = document.querySelectorAll('.btn-preset-model');
 
 // Initialize 2D Crease Pattern Viewer
 const creaseViewer = new CreasePatternViewer(creaseCanvas);
@@ -78,16 +81,75 @@ function loadModelInSim(model) {
   setSimFoldPercent(0);
 
   const win = getSimWindow();
-  if (win && win.globals && model.simUrl) {
+  if (win && win.globals) {
     try {
-      if (win.globals.importer) {
+      if (model.foldData && win.globals.pattern) {
+        win.globals.pattern.setFoldData(model.foldData, true);
+      } else if (model.svgData && win.globals.pattern) {
+        win.globals.pattern.loadSVG(model.svgData);
+      } else if (model.simUrl && win.globals.importer) {
         win.globals.importer.importDemoFile(model.simUrl);
-      } else if (win.$) {
+      } else if (win.$ && model.simUrl) {
         win.$(`.demo[data-url='${model.simUrl}']`).click();
       }
     } catch (e) {
       console.warn('Error loading model into origami simulator:', e);
     }
+  }
+}
+
+/**
+ * Solves 3D OBJ mesh and loads synthesized crease pattern into 2D viewer and 3D GPU simulator
+ */
+async function process3DMesh(objText, modelName = 'Synthesized 3D Model') {
+  try {
+    const meshData = MeshSkeletonizer.parseOBJ(objText);
+    const skeleton = MeshSkeletonizer.extractSkeleton(meshData);
+    const foldData = OrigamiUniversalSolver.synthesizeFoldPattern(skeleton);
+    const svgData = OrigamiUniversalSolver.foldToSVG(foldData);
+
+    // Build model structure for CreasePatternViewer
+    const customModel = {
+      id: `mesh-${Date.now()}`,
+      name: modelName,
+      paperSize: 1000,
+      foldData,
+      svgData,
+      steps: [
+        {
+          step: 1,
+          description: `Extremity tree with ${skeleton.extremities.length} flaps solved`,
+          creases: foldData.edges_vertices.map((e, idx) => {
+            const v1 = foldData.vertices_coords[e[0]];
+            const v2 = foldData.vertices_coords[e[1]];
+            const assign = foldData.edges_assignment[idx];
+            return {
+              x1: v1[0],
+              y1: v1[1],
+              x2: v2[0],
+              y2: v2[1],
+              type: assign === 'M' ? 'mountain' : assign === 'V' ? 'valley' : 'facet'
+            };
+          })
+        }
+      ]
+    };
+
+    // Add option in select dropdown if not present
+    let opt = document.querySelector(`option[value="${customModel.id}"]`);
+    if (!opt) {
+      opt = document.createElement('option');
+      opt.value = customModel.id;
+      opt.textContent = `✨ ${modelName} (Generated)`;
+      modelSelect.appendChild(opt);
+    }
+    modelSelect.value = customModel.id;
+
+    loadModelInSim(customModel);
+    modalImport.classList.add('hidden');
+  } catch (err) {
+    console.error('Failed to solve 3D mesh into origami:', err);
+    alert('Solver Error: ' + err.message);
   }
 }
 
@@ -224,14 +286,57 @@ dropzone.addEventListener('click', () => {
   fileMeshInput.click();
 });
 
+// Drag and drop handlers
+dropzone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropzone.style.borderColor = 'var(--accent-primary)';
+});
+
+dropzone.addEventListener('dragleave', () => {
+  dropzone.style.borderColor = '';
+});
+
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.style.borderColor = '';
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith('.obj')) {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      process3DMesh(ev.target.result, file.name.replace(/\.obj$/i, ''));
+    };
+    reader.readAsText(file);
+  }
+});
+
 fileMeshInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (file) {
-    alert(`File "${file.name}" received. Origami computational solver will parse the 3D geometry mesh!`);
-    modalImport.classList.add('hidden');
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      process3DMesh(ev.target.result, file.name.replace(/\.obj$/i, ''));
+    };
+    reader.readAsText(file);
   }
+});
+
+// Sample 3D test model preset buttons
+presetButtons.forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const objUrl = btn.getAttribute('data-obj');
+    const modelName = btn.textContent.trim();
+    try {
+      const resp = await fetch(objUrl);
+      const text = await resp.text();
+      await process3DMesh(text, modelName);
+    } catch (err) {
+      console.error('Failed to load preset OBJ:', err);
+      alert('Error loading sample model: ' + err.message);
+    }
+  });
 });
 
 // Initial boot
 loadModelInSim(CLEAN_ORIGAMI_MODELS[0]);
+
 
