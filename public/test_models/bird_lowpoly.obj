@@ -1,0 +1,18 @@
+# Low-poly stylized bird (wing span, head, tail)
+# Extracted extremities: 2 wings (±X), head (+Z), tail (-Z)
+v 0.0 5.0 0.0
+v 0.0 8.0 20.0
+v 0.0 2.0 -25.0
+v 35.0 12.0 0.0
+v -35.0 12.0 0.0
+v 0.0 -5.0 0.0
+
+# Faces connecting center body to extremities
+f 1 2 4
+f 1 4 3
+f 1 3 5
+f 1 5 2
+f 6 4 2
+f 6 3 4
+f 6 5 3
+f 6 2 5
