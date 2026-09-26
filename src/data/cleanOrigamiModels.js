@@ -20,95 +20,128 @@ import * as THREE from 'three';
 
 export const CLEAN_ORIGAMI_MODELS = [
   {
-    id: 'blintz-base',
-    name: 'Blintz Base (4 Diagonal Corner Folds)',
-    difficulty: 'Clean Single-Sheet Foundation',
-    description: 'The foundation of dozens of traditional origami models. 4 diagonal folds where each corner folds into the exact center of the single sheet.',
+    id: 'crane-3d',
+    name: 'Traditional Origami Crane (Tsugumi/Tsuru)',
+    simUrl: 'Origami/traditionalCrane.svg',
+    difficulty: 'Master Classic',
+    description: 'The world-famous Japanese crane. Solved with multi-point mountain & valley dynamic GPU springs.',
     paperSize: 100,
     creases: [
-      // Outer border
       { x1: -50, y1: -50, x2: 50, y1: -50, type: 'border' },
       { x1: 50, y1: -50, x2: 50, y2: 50, type: 'border' },
       { x1: 50, y1: 50, x2: -50, y2: 50, type: 'border' },
       { x1: -50, y1: 50, x2: -50, y2: -50, type: 'border' },
-      // 4 Diagonal Creases connecting midpoints of edges
-      // Fold 1: Top-Left diagonal crease: (-50, 0) to (0, -50)
-      { x1: -50, y1: 0, x2: 0, y2: -50, type: 'valley', label: 'Top-Left Corner Fold' },
-      // Fold 2: Top-Right diagonal crease: (0, -50) to (50, 0)
-      { x1: 0, y1: -50, x2: 50, y2: 0, type: 'valley', label: 'Top-Right Corner Fold' },
-      // Fold 3: Bottom-Right diagonal crease: (50, 0) to (0, 50)
-      { x1: 50, y1: 0, x2: 0, y2: 50, type: 'valley', label: 'Bottom-Right Corner Fold' },
-      // Fold 4: Bottom-Left diagonal crease: (0, 50) to (-50, 0)
-      { x1: 0, y1: 50, x2: -50, y2: 0, type: 'valley', label: 'Bottom-Left Corner Fold' }
+      { x1: -50, y1: -50, x2: 50, y2: 50, type: 'valley', label: 'Diagonal Fold' },
+      { x1: -50, y1: 50, x2: 50, y2: -50, type: 'valley', label: 'Diagonal Fold B' },
+      { x1: 0, y1: -50, x2: 0, y2: 50, type: 'mountain', label: 'Vertical Fold' },
+      { x1: -50, y1: 0, x2: 50, y2: 0, type: 'mountain', label: 'Horizontal Fold' }
     ],
     steps: [
-      {
-        stepNumber: 1,
-        title: 'Initial Flat Sheet',
-        instruction: 'Single undivided square sheet of paper laying flat on the workspace.',
-        creaseHighlightIndex: [0, 1, 2, 3]
-      },
-      {
-        stepNumber: 2,
-        title: 'Fold Top-Left Corner to Center',
-        instruction: 'Fold the top-left corner inward along its diagonal crease so the tip touches the center (0,0).',
-        creaseHighlightIndex: [4]
-      },
-      {
-        stepNumber: 3,
-        title: 'Fold Top-Right Corner to Center',
-        instruction: 'Fold the top-right corner inward along its diagonal crease to meet the center.',
-        creaseHighlightIndex: [5]
-      },
-      {
-        stepNumber: 4,
-        title: 'Fold Bottom-Right Corner to Center',
-        instruction: 'Fold the bottom-right corner inward along its diagonal crease to meet the center.',
-        creaseHighlightIndex: [6]
-      },
-      {
-        stepNumber: 5,
-        title: 'Fold Bottom-Left Corner to Center',
-        instruction: 'Fold the fourth corner inward along its diagonal crease to complete the blintz square.',
-        creaseHighlightIndex: [7]
-      }
+      { stepNumber: 1, title: 'Flat Square Sheet', instruction: 'Start with an unbroken square sheet of paper.' },
+      { stepNumber: 2, title: 'Preliminary Base Folds', instruction: 'Simultaneous valley diagonals and mountain cross-creases.' },
+      { stepNumber: 3, title: 'Petal Formations', instruction: 'Flaps fold inward into elongated diamond wings.' },
+      { stepNumber: 4, title: 'Finished 3D Crane Body', instruction: 'Neck and tail reversed, wings spread into 3D equilibrium.' }
     ]
   },
   {
-    id: 'diagonal-halves',
-    name: 'Diagonal Half & Quarter Fold',
-    difficulty: 'Pure Geometric Triangle Folds',
-    description: '4 consecutive diagonal folds demonstrating corner-to-corner origami folding on a single continuous sheet.',
+    id: 'flapping-bird',
+    name: 'Flapping Bird (Moving Wings)',
+    simUrl: 'Origami/flappingBird.svg',
+    difficulty: 'Action Model',
+    description: 'Dynamic origami model that flaps wings along continuous hinge creases.',
     paperSize: 100,
     creases: [
       { x1: -50, y1: -50, x2: 50, y1: -50, type: 'border' },
       { x1: 50, y1: -50, x2: 50, y2: 50, type: 'border' },
       { x1: 50, y1: 50, x2: -50, y2: 50, type: 'border' },
       { x1: -50, y1: 50, x2: -50, y2: -50, type: 'border' },
-      // Diagonal A
-      { x1: -50, y1: -50, x2: 50, y2: 50, type: 'valley', label: 'Primary Diagonal' },
-      // Diagonal B
-      { x1: -50, y1: 50, x2: 50, y2: -50, type: 'valley', label: 'Secondary Diagonal' }
+      { x1: -50, y1: -50, x2: 50, y2: 50, type: 'valley' },
+      { x1: -50, y1: 50, x2: 50, y2: -50, type: 'valley' }
     ],
     steps: [
-      {
-        stepNumber: 1,
-        title: 'Flat Square Sheet',
-        instruction: 'Start with the sheet flat.',
-        creaseHighlightIndex: [0, 1, 2, 3]
-      },
-      {
-        stepNumber: 2,
-        title: 'Diagonal Half Fold',
-        instruction: 'Fold the lower half diagonally upward over the top half along the center diagonal.',
-        creaseHighlightIndex: [4]
-      },
-      {
-        stepNumber: 3,
-        title: 'Fold in Half Again (Quarter Triangle)',
-        instruction: 'Fold the right corner over to the left corner along the median altitude to form a neat 45-degree triangle.',
-        creaseHighlightIndex: [5]
-      }
+      { stepNumber: 1, title: 'Flat Square Sheet', instruction: 'Square paper ready for folding.' },
+      { stepNumber: 2, title: 'Bird Base Creases', instruction: 'Dynamic hinges form the core bird base.' },
+      { stepNumber: 3, title: 'Flapping Wing Fold', instruction: 'Paper flexes smoothly along symmetric valley folds.' }
+    ]
+  },
+  {
+    id: 'waterbomb-base',
+    name: 'Waterbomb Base (Triangle Inward Fold)',
+    simUrl: 'Bases/waterbombBase.svg',
+    difficulty: 'Fundamental Base',
+    description: 'Essential origami base folding 4 triangular quadrants inward into a compact double-triangle.',
+    paperSize: 100,
+    creases: [
+      { x1: -50, y1: -50, x2: 50, y1: -50, type: 'border' },
+      { x1: 50, y1: -50, x2: 50, y2: 50, type: 'border' },
+      { x1: 50, y1: 50, x2: -50, y2: 50, type: 'border' },
+      { x1: -50, y1: 50, x2: -50, y2: -50, type: 'border' },
+      { x1: -50, y1: -50, x2: 50, y2: 50, type: 'mountain', label: 'Diagonal Mountain A' },
+      { x1: 25, y1: -50, x2: -25, y2: 50, type: 'mountain', label: 'Diagonal Mountain B' },
+      { x1: -50, y1: 0, x2: 50, y2: 0, type: 'valley', label: 'Horizontal Valley' }
+    ],
+    steps: [
+      { stepNumber: 1, title: 'Flat Square Sheet', instruction: 'Start flat.' },
+      { stepNumber: 2, title: 'Mountain Diagonals', instruction: 'Fold both diagonals into mountain creases.' },
+      { stepNumber: 3, title: 'Collapse into Waterbomb Base', instruction: 'Sides push inward simultaneously into a neat triangle.' }
+    ]
+  },
+  {
+    id: 'paper-airplane',
+    name: 'Aerodynamic Paper Airplane',
+    simUrl: 'Origami/airplane.svg',
+    difficulty: 'Classic Fold',
+    description: 'Aeronautical dart fold with symmetrical wings folded down along the center fuselage.',
+    paperSize: 100,
+    creases: [
+      { x1: -50, y1: -50, x2: 50, y1: -50, type: 'border' },
+      { x1: 50, y1: -50, x2: 50, y2: 50, type: 'border' },
+      { x1: 50, y1: 50, x2: -50, y2: 50, type: 'border' },
+      { x1: -50, y1: 50, x2: -50, y2: -50, type: 'border' },
+      { x1: 0, y1: -50, x2: 0, y2: 50, type: 'valley', label: 'Fuselage Fold' }
+    ],
+    steps: [
+      { stepNumber: 1, title: 'Flat Sheet', instruction: 'Start with a rectangular or square sheet.' },
+      { stepNumber: 2, title: 'Corner Nose Folds', instruction: 'Fold top corners inward toward the center.' },
+      { stepNumber: 3, title: 'Wing Folds', instruction: 'Fold both wings outward to generate aerodynamic lift.' }
+    ]
+  },
+  {
+    id: 'russian-triangle',
+    name: 'Russian Triangle Base',
+    simUrl: 'SimpleFolds/russianTriangle.svg',
+    difficulty: 'Geometric Fold',
+    description: 'Precise multi-triangle compound fold with zero paper distortion.',
+    paperSize: 100,
+    creases: [
+      { x1: -50, y1: -50, x2: 50, y1: -50, type: 'border' },
+      { x1: 50, y1: -50, x2: 50, y2: 50, type: 'border' },
+      { x1: 50, y1: 50, x2: -50, y2: 50, type: 'border' },
+      { x1: -50, y1: 50, x2: -50, y2: -50, type: 'border' },
+      { x1: -50, y1: -50, x2: 50, y2: 50, type: 'valley', label: 'Diagonal Fold' }
+    ],
+    steps: [
+      { stepNumber: 1, title: 'Flat Sheet', instruction: 'Flat sheet ready for folding.' },
+      { stepNumber: 2, title: 'Triangle Creases', instruction: 'Creases fold symmetrically without tearing.' }
+    ]
+  },
+  {
+    id: 'hypar-twisted',
+    name: 'Hyperbolic Paraboloid (Hypar)',
+    simUrl: 'Origami/hypar.svg',
+    difficulty: 'Advanced Non-Euclidean',
+    description: 'Self-folding 3D curved saddle surface created entirely by concentric square folds.',
+    paperSize: 100,
+    creases: [
+      { x1: -50, y1: -50, x2: 50, y1: -50, type: 'border' },
+      { x1: 50, y1: -50, x2: 50, y2: 50, type: 'border' },
+      { x1: 50, y1: 50, x2: -50, y2: 50, type: 'border' },
+      { x1: -50, y1: 50, x2: -50, y2: -50, type: 'border' }
+    ],
+    steps: [
+      { stepNumber: 1, title: 'Concentric Squares', instruction: 'Alternating mountain and valley concentric squares.' },
+      { stepNumber: 2, title: 'Hyperbolic Saddle Collapse', instruction: 'Sheet buckles naturally into a double-curved 3D saddle.' }
     ]
   }
 ];
+

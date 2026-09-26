@@ -29,8 +29,12 @@
           <div class="model-selector-wrapper">
             <span>Model:</span>
             <select id="model-select" class="app-select">
-              <option value="blintz-base" selected>Blintz Base (4 Diagonal Folds)</option>
-              <option value="diagonal-halves">Diagonal Halves & Quarters</option>
+              <option value="crane-3d" selected>Traditional Crane (Tsuru)</option>
+              <option value="flapping-bird">Flapping Bird (Moving Wings)</option>
+              <option value="waterbomb-base">Waterbomb Base</option>
+              <option value="paper-airplane">Paper Airplane</option>
+              <option value="russian-triangle">Russian Triangle</option>
+              <option value="hypar-twisted">Hyperbolic Paraboloid (Hypar)</option>
             </select>
           </div>
 
@@ -75,27 +79,14 @@
           </div>
         </section>
 
-        <!-- RIGHT: 3D INTERACTIVE FOLD SIMULATION -->
+        <!-- RIGHT: 3D INTERACTIVE FOLD SIMULATION (Official MIT GPU OrigamiSimulator) -->
         <section class="viewport-panel">
           <div class="panel-header">
-            <span class="panel-title">3D Folded Simulation</span>
+            <span class="panel-title">3D Physics Simulation (GPU Spring-Mass Engine)</span>
           </div>
 
-          <div class="panel-tools-topright">
-            <button id="btn-reset-3d" class="tool-btn" title="Reset 3D Camera">Reset Orbit</button>
-          </div>
-
-          <div id="three-container" class="canvas-container"></div>
-
-          <!-- ACTIVE STEP INSTRUCTION BANNER -->
-          <div class="step-banner">
-            <div class="step-info-col">
-              <div class="step-count" id="step-counter">Step 1 of 8</div>
-              <div class="step-title" id="step-title">Initial Flat Sheet</div>
-              <div class="step-instruction" id="step-instruction">
-                Start with a square sheet of paper, colored side facing down.
-              </div>
-            </div>
+          <div class="canvas-container">
+            <iframe id="origami-frame" class="sim-iframe" src="/origamisim/index.html"></iframe>
           </div>
         </section>
       </main>
