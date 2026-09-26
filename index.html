@@ -54,22 +54,19 @@
         <!-- LEFT: 2D CREASE PATTERN -->
         <section class="viewport-panel">
           <div class="panel-header">
-            <span class="panel-title">2D Crease Pattern (Crease Lines)</span>
-            <span class="legend-tag"><span class="legend-dot mountain"></span> Mountain Fold</span>
-            <span class="legend-tag"><span class="legend-dot valley"></span> Valley Fold</span>
+            <span class="panel-title">2D Crease Pattern</span>
+            <span class="legend-tag"><span class="legend-dot mountain"></span> Mountain (Red)</span>
+            <span class="legend-tag"><span class="legend-dot valley"></span> Valley (Blue)</span>
           </div>
 
           <div class="panel-tools-topright">
-            <button id="btn-toggle-view" class="tool-btn" title="Toggle between Step Fold Diagram and Unfolded Sheet Pattern">
-              <span id="view-mode-label">Mode: Step Diagram</span>
-            </button>
             <button id="btn-export-svg" class="tool-btn" title="Download printable vector crease pattern">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
-              Export SVG
+              Export Pattern SVG
             </button>
             <button id="btn-reset-2d" class="tool-btn" title="Reset Crease Pan & Zoom">Reset View</button>
           </div>

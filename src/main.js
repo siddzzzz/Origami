@@ -186,16 +186,6 @@ speedSelect.addEventListener('change', (e) => {
   playSpeed = parseFloat(e.target.value) || 1.0;
 });
 
-const btnToggleView = document.getElementById('btn-toggle-view');
-const viewModeLabel = document.getElementById('view-mode-label');
-
-if (btnToggleView) {
-  btnToggleView.addEventListener('click', () => {
-    const newMode = creaseViewer.toggleViewMode();
-    viewModeLabel.textContent = newMode === 'folded' ? 'Mode: Step Diagram' : 'Mode: Unfolded Flat Sheet';
-  });
-}
-
 btnReset2D.addEventListener('click', () => {
   creaseViewer.resetView();
 });

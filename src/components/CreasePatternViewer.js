@@ -1,26 +1,17 @@
 /**
- * Exact Geometric Crease Pattern & Folding Simulator
- * 
- * KEY INSIGHT:
- * In physical origami:
- * 1. When paper is folded (e.g. into a triangle in Step 1),
- *    the next fold (Step 2) is drawn on the ALREADY-FOLDED 3D shape, NOT the flat sheet!
- * 2. When you unfold that sheet back flat, the crease line actually reflects across
- *    all underlying paper layers!
- * 
- * This module supports dual visual modes:
- * - MODE A: Folded Step Diagram (Shows the fold line on the current folded shape - how origami diagrams work!)
- * - MODE B: Unfolded Flat Crease Pattern (Shows all reflected crease lines on the unfolded sheet).
+ * Authentic 2D Origami Crease Pattern Viewer
+ * Parses and visualizes the exact mathematical crease patterns directly from origami SVG files:
+ * - Mountain folds (Red #ef4444)
+ * - Valley folds (Blue #3b82f6)
+ * - Boundary / Cut edges (Dark Slate #1e293b / Green #22c55e)
+ * - Facet / Triangulation hinges (Yellow/Gray)
  */
-
-import { CreaseType } from '../data/origamiModels.js';
 
 export class CreasePatternViewer {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.model = null;
-    this.currentStepIndex = 0;
 
     // Viewport transform
     this.zoom = 1.0;
@@ -30,7 +21,9 @@ export class CreasePatternViewer {
     this.startX = 0;
     this.startY = 0;
 
-    this.viewMode = 'folded'; // 'folded' (Diagram mode) or 'flat' (Unfolded CP mode)
+    // Parsed geometry cache
+    this.parsedGeometry = null;
+    this.cachedUrl = null;
 
     this.initEvents();
     this.resize();
@@ -39,8 +32,8 @@ export class CreasePatternViewer {
   initEvents() {
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const factor = e.deltaY < 0 ? 1.1 : 0.9;
-      this.zoom = Math.max(0.4, Math.min(5.0, this.zoom * factor));
+      const factor = e.deltaY < 0 ? 1.15 : 0.85;
+      this.zoom = Math.max(0.2, Math.min(8.0, this.zoom * factor));
       this.render();
     });
 
@@ -77,15 +70,20 @@ export class CreasePatternViewer {
     this.render();
   }
 
-  setModel(model, stepIndex = 0) {
+  setModel(model) {
     this.model = model;
-    this.currentStepIndex = stepIndex;
     this.resetView();
-    this.render();
+
+    if (model && model.simUrl) {
+      this.loadPatternFromSVG(`/origamisim/assets/${model.simUrl}`);
+    } else {
+      this.parsedGeometry = null;
+      this.render();
+    }
   }
 
-  setStep(stepIndex) {
-    this.currentStepIndex = stepIndex;
+  setStep() {
+    // Re-render
     this.render();
   }
 
@@ -96,14 +94,182 @@ export class CreasePatternViewer {
     this.render();
   }
 
-  toggleViewMode() {
-    this.viewMode = this.viewMode === 'folded' ? 'flat' : 'folded';
-    this.render();
-    return this.viewMode;
+  async loadPatternFromSVG(url) {
+    if (this.cachedUrl === url && this.parsedGeometry) {
+      this.render();
+      return;
+    }
+
+    try {
+      const resp = await fetch(url);
+      const text = await resp.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(text, 'image/svg+xml');
+
+      const elements = [];
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+      const updateBounds = (x, y) => {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      };
+
+      // 1. Process <line>
+      const lines = doc.querySelectorAll('line');
+      lines.forEach(l => {
+        const x1 = parseFloat(l.getAttribute('x1') || '0');
+        const y1 = parseFloat(l.getAttribute('y1') || '0');
+        const x2 = parseFloat(l.getAttribute('x2') || '0');
+        const y2 = parseFloat(l.getAttribute('y2') || '0');
+        const stroke = (l.getAttribute('stroke') || l.style.stroke || '#000000').toLowerCase();
+        const opacity = parseFloat(l.getAttribute('opacity') || l.style.opacity || '1.0');
+
+        updateBounds(x1, y1);
+        updateBounds(x2, y2);
+
+        elements.push({
+          type: 'line',
+          x1, y1, x2, y2,
+          stroke: this.classifyStroke(stroke),
+          opacity
+        });
+      });
+
+      // 2. Process <rect>
+      const rects = doc.querySelectorAll('rect');
+      rects.forEach(r => {
+        const x = parseFloat(r.getAttribute('x') || '0');
+        const y = parseFloat(r.getAttribute('y') || '0');
+        const w = parseFloat(r.getAttribute('width') || '0');
+        const h = parseFloat(r.getAttribute('height') || '0');
+        const stroke = (r.getAttribute('stroke') || r.style.stroke || '#000000').toLowerCase();
+
+        updateBounds(x, y);
+        updateBounds(x + w, y + h);
+
+        elements.push({
+          type: 'rect',
+          x, y, w, h,
+          stroke: this.classifyStroke(stroke),
+          opacity: 1.0
+        });
+      });
+
+      // 3. Process <path>
+      const paths = doc.querySelectorAll('path');
+      paths.forEach(p => {
+        const d = p.getAttribute('d') || '';
+        const stroke = (p.getAttribute('stroke') || p.style.stroke || '#000000').toLowerCase();
+        const opacity = parseFloat(p.getAttribute('opacity') || p.style.opacity || '1.0');
+
+        const parsedSublines = this.parsePathToLines(d, updateBounds);
+        parsedSublines.forEach(sub => {
+          elements.push({
+            type: 'line',
+            x1: sub.x1, y1: sub.y1, x2: sub.x2, y2: sub.y2,
+            stroke: this.classifyStroke(stroke),
+            opacity
+          });
+        });
+      });
+
+      if (minX === Infinity) {
+        minX = 0; minY = 0; maxX = 100; maxY = 100;
+      }
+
+      const width = maxX - minX || 100;
+      const height = maxY - minY || 100;
+      const centerX = minX + width / 2;
+      const centerY = minY + height / 2;
+
+      this.parsedGeometry = {
+        elements,
+        width,
+        height,
+        centerX,
+        centerY,
+        maxDim: Math.max(width, height)
+      };
+      this.cachedUrl = url;
+      this.render();
+    } catch (err) {
+      console.warn('Failed to parse crease pattern SVG:', err);
+    }
+  }
+
+  parsePathToLines(d, updateBounds) {
+    const lines = [];
+    // Basic SVG path segment parser for M/L/H/V/z commands
+    const commands = d.match(/([a-df-z]|[\-+]?[0-9]*\.?[0-9]+(?:[eE][\-+]?[0-9]+)?)/gi) || [];
+    let curX = 0, curY = 0;
+    let startX = 0, startY = 0;
+    let i = 0;
+    let cmd = 'M';
+
+    while (i < commands.length) {
+      const token = commands[i];
+      if (/^[a-df-z]$/i.test(token)) {
+        cmd = token;
+        i++;
+      }
+
+      if (cmd === 'M' || cmd === 'm') {
+        const x = parseFloat(commands[i++]);
+        const y = parseFloat(commands[i++]);
+        curX = cmd === 'M' ? x : curX + x;
+        curY = cmd === 'M' ? y : curY + y;
+        startX = curX;
+        startY = curY;
+        updateBounds(curX, curY);
+      } else if (cmd === 'L' || cmd === 'l') {
+        const x = parseFloat(commands[i++]);
+        const y = parseFloat(commands[i++]);
+        const nextX = cmd === 'L' ? x : curX + x;
+        const nextY = cmd === 'L' ? y : curY + y;
+        lines.push({ x1: curX, y1: curY, x2: nextX, y2: nextY });
+        updateBounds(nextX, nextY);
+        curX = nextX;
+        curY = nextY;
+      } else if (cmd === 'H' || cmd === 'h') {
+        const x = parseFloat(commands[i++]);
+        const nextX = cmd === 'H' ? x : curX + x;
+        lines.push({ x1: curX, y1: curY, x2: nextX, y2: curY });
+        updateBounds(nextX, curY);
+        curX = nextX;
+      } else if (cmd === 'V' || cmd === 'v') {
+        const y = parseFloat(commands[i++]);
+        const nextY = cmd === 'V' ? y : curY + y;
+        lines.push({ x1: curX, y1: curY, x2: curX, y2: nextY });
+        updateBounds(curX, nextY);
+        curY = nextY;
+      } else if (cmd === 'z' || cmd === 'Z') {
+        if (curX !== startX || curY !== startY) {
+          lines.push({ x1: curX, y1: curY, x2: startX, y2: startY });
+        }
+        curX = startX;
+        curY = startY;
+      } else {
+        i++;
+      }
+    }
+
+    return lines;
+  }
+
+  classifyStroke(stroke) {
+    if (!stroke) return 'border';
+    if (stroke.includes('#ff0000') || stroke.includes('rgb(255,0,0)') || stroke === 'red') return 'mountain';
+    if (stroke.includes('#0000ff') || stroke.includes('rgb(0,0,255)') || stroke === 'blue') return 'valley';
+    if (stroke.includes('#00ff00') || stroke.includes('rgb(0,255,0)') || stroke === 'green') return 'cut';
+    if (stroke.includes('#ffff00') || stroke.includes('rgb(255,255,0)') || stroke === 'yellow') return 'facet';
+    if (stroke.includes('#ff00ff') || stroke.includes('magenta')) return 'hinge';
+    return 'border';
   }
 
   render() {
-    if (!this.ctx || !this.model) return;
+    if (!this.ctx) return;
 
     const ctx = this.ctx;
     const w = this.displayWidth;
@@ -114,201 +280,87 @@ export class CreasePatternViewer {
 
     this.drawGrid(w, h);
 
+    if (!this.parsedGeometry) {
+      ctx.restore();
+      return;
+    }
+
+    const { elements, width, height, centerX, centerY, maxDim } = this.parsedGeometry;
+
     ctx.translate(w / 2 + this.panX, h / 2 + this.panY);
     ctx.scale(this.zoom, this.zoom);
 
-    const scaleFactor = Math.min(w, h) * 0.007;
-    ctx.scale(scaleFactor, scaleFactor);
+    // Scale so paper nicely occupies 70% of viewport
+    const fitScale = (Math.min(w, h) * 0.72) / maxDim;
+    ctx.scale(fitScale, fitScale);
 
-    if (this.viewMode === 'folded') {
-      this.renderFoldedDiagram(ctx);
-    } else {
-      this.renderUnfoldedFlatCP(ctx);
-    }
+    // Center geometry at origin (0,0)
+    ctx.translate(-centerX, -centerY);
 
-    ctx.restore();
-  }
-
-  /**
-   * Renders the 2D Origami Instruction Diagram for the CURRENT step:
-   * Shows the shape AS IT LOOKS IN 2D after prior folds, with the active fold line dashed across it!
-   */
-  renderFoldedDiagram(ctx) {
-    const s = (this.model.paperSize || 100) / 2;
-
-    if (this.model.id === 'blintz-base') {
-      this.renderBlintzDiagram(ctx, s);
-    } else if (this.model.id === 'diagonal-halves') {
-      this.renderDiagonalDiagram(ctx, s);
-    } else {
-      this.renderUnfoldedFlatCP(ctx);
-    }
-  }
-
-  renderBlintzDiagram(ctx, s) {
-    // Outer square boundary
+    // Draw background paper sheet
     ctx.fillStyle = '#faf8f5';
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 2.0;
-    ctx.fillRect(-s, -s, s * 2, s * 2);
-    ctx.strokeRect(-s, -s, s * 2, s * 2);
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 6;
+    ctx.fillRect(centerX - width / 2, centerY - height / 2, width, height);
 
-    // Prior folded corners shown turned over in blue craft color!
-    const step = this.currentStepIndex;
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
 
-    const drawFoldedTriangle = (p1, p2, p3) => {
-      ctx.fillStyle = '#38bdf8'; // Sky blue craft underside
+    // Draw pattern lines with origami notation
+    elements.forEach(elem => {
       ctx.beginPath();
-      ctx.moveTo(p1[0], p1[1]);
-      ctx.lineTo(p2[0], p2[1]);
-      ctx.lineTo(p3[0], p3[1]);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = '#0284c7';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    };
+      let color = '#0f172a';
+      let lineWidth = maxDim / 180;
+      let dash = [];
 
-    // If step >= 1: Top-Left corner is already folded to center (0,0)
-    if (step >= 1) {
-      drawFoldedTriangle([-s, 0], [0, -s], [0, 0]);
-    }
-    // If step >= 2: Top-Right corner folded to (0,0)
-    if (step >= 2) {
-      drawFoldedTriangle([0, -s], [s, 0], [0, 0]);
-    }
-    // If step >= 3: Bottom-Right corner folded to (0,0)
-    if (step >= 3) {
-      drawFoldedTriangle([s, 0], [0, s], [0, 0]);
-    }
-    // If step >= 4: Bottom-Left corner folded to (0,0)
-    if (step >= 4) {
-      drawFoldedTriangle([0, s], [-s, 0], [0, 0]);
-    }
-
-    // Now draw the ACTIVE crease line for the current step in vibrant glowing amber:
-    const activeCreases = [
-      null, // step 0 is flat
-      { x1: -s, y1: 0, x2: 0, y2: -s }, // step 1
-      { x1: 0, y1: -s, x2: s, y2: 0 },  // step 2
-      { x1: s, y1: 0, x2: 0, y2: s },   // step 3
-      { x1: 0, y1: s, x2: -s, y2: 0 }   // step 4
-    ];
-
-    const currentCrease = activeCreases[step];
-    if (currentCrease) {
-      ctx.save();
-      ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
-      ctx.lineWidth = 8;
-      ctx.beginPath();
-      ctx.moveTo(currentCrease.x1, currentCrease.y1);
-      ctx.lineTo(currentCrease.x2, currentCrease.y2);
-      ctx.stroke();
-
-      ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 3.0;
-      ctx.setLineDash([5, 4]); // Dashed valley fold notation
-      ctx.stroke();
-      ctx.restore();
-
-      // Draw fold arrow pointing to center
-      this.drawFoldArrow(ctx, currentCrease, [0, 0]);
-    }
-  }
-
-  renderDiagonalDiagram(ctx, s) {
-    const step = this.currentStepIndex;
-
-    if (step === 0) {
-      // Flat square with center diagonal fold dashed
-      ctx.fillStyle = '#faf8f5';
-      ctx.fillRect(-s, -s, s * 2, s * 2);
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 2.0;
-      ctx.strokeRect(-s, -s, s * 2, s * 2);
-
-      // Diagonal valley fold
-      ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 3.0;
-      ctx.setLineDash([6, 4]);
-      ctx.beginPath();
-      ctx.moveTo(-s, -s);
-      ctx.lineTo(s, s);
-      ctx.stroke();
-    } else {
-      // Step 1: Already folded into a triangle!
-      ctx.fillStyle = '#38bdf8'; // Blue underside
-      ctx.beginPath();
-      ctx.moveTo(-s, -s);
-      ctx.lineTo(s, -s);
-      ctx.lineTo(s, s);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 2.0;
-      ctx.stroke();
-
-      // Next fold line down median altitude: from (s, -s) to (0, 0)
-      ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 3.0;
-      ctx.setLineDash([6, 4]);
-      ctx.beginPath();
-      ctx.moveTo(s, -s);
-      ctx.lineTo(0, 0);
-      ctx.stroke();
-    }
-  }
-
-  drawFoldArrow(ctx, crease, targetPoint) {
-    const midX = (crease.x1 + crease.x2) / 2;
-    const midY = (crease.y1 + crease.y2) / 2;
-
-    ctx.save();
-    ctx.strokeStyle = '#f59e0b';
-    ctx.fillStyle = '#f59e0b';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(midX, midY, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  /**
-   * Mode B: Complete Unfolded Crease Pattern (Standard origami CP)
-   */
-  renderUnfoldedFlatCP(ctx) {
-    const halfSize = (this.model.paperSize || 100) / 2;
-    ctx.fillStyle = '#faf8f5';
-    ctx.fillRect(-halfSize, -halfSize, halfSize * 2, halfSize * 2);
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 2.0;
-    ctx.strokeRect(-halfSize, -halfSize, halfSize * 2, halfSize * 2);
-
-    const activeStep = this.model.steps ? this.model.steps[this.currentStepIndex] : null;
-    const highlightedIndices = activeStep?.creaseHighlightIndex || [];
-
-    this.model.creases.forEach((crease, idx) => {
-      const isHighlighted = highlightedIndices.includes(idx);
-      ctx.beginPath();
-      ctx.moveTo(crease.x1, crease.y1);
-      ctx.lineTo(crease.x2, crease.y2);
-
-      if (isHighlighted) {
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 3.5;
-        ctx.setLineDash([]);
+      if (elem.stroke === 'mountain') {
+        color = '#ef4444'; // Red
+        dash = [maxDim / 60, maxDim / 100, maxDim / 200, maxDim / 100];
+        lineWidth = maxDim / 160;
+      } else if (elem.stroke === 'valley') {
+        color = '#3b82f6'; // Blue
+        dash = [maxDim / 80, maxDim / 90];
+        lineWidth = maxDim / 160;
+      } else if (elem.stroke === 'cut') {
+        color = '#22c55e'; // Green
+        dash = [];
+        lineWidth = maxDim / 120;
+      } else if (elem.stroke === 'facet') {
+        color = 'rgba(234, 179, 8, 0.75)'; // Amber/yellow hinge
+        dash = [maxDim / 120, maxDim / 120];
+        lineWidth = maxDim / 240;
+      } else if (elem.stroke === 'hinge') {
+        color = '#ec4899';
+        dash = [maxDim / 100, maxDim / 100];
+        lineWidth = maxDim / 200;
       } else {
-        ctx.strokeStyle = crease.type === 'mountain' ? '#ef4444' : '#3b82f6';
-        ctx.lineWidth = 1.4;
-        ctx.setLineDash(crease.type === 'mountain' ? [8, 3, 2, 3] : [5, 4]);
+        // Border
+        color = '#1e293b';
+        dash = [];
+        lineWidth = maxDim / 130;
       }
-      ctx.stroke();
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(1.2, lineWidth);
+      ctx.setLineDash(dash);
+
+      if (elem.type === 'line') {
+        ctx.moveTo(elem.x1, elem.y1);
+        ctx.lineTo(elem.x2, elem.y2);
+        ctx.stroke();
+      } else if (elem.type === 'rect') {
+        ctx.strokeRect(elem.x, elem.y, elem.w, elem.h);
+      }
     });
+
+    ctx.restore();
   }
 
   drawGrid(w, h) {
     const ctx = this.ctx;
-    ctx.strokeStyle = 'rgba(226, 232, 240, 0.4)';
+    ctx.strokeStyle = 'rgba(226, 232, 240, 0.08)';
     ctx.lineWidth = 1;
     const gridSize = 24;
 
@@ -325,20 +377,37 @@ export class CreasePatternViewer {
   }
 
   exportToSVG() {
-    if (!this.model) return null;
-    const half = (this.model.paperSize || 100) / 2;
-    const size = half * 2;
+    if (!this.parsedGeometry) return null;
+    const { elements, width, height, centerX, centerY } = this.parsedGeometry;
+    const pad = 20;
 
     let svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-half - 10} ${-half - 10} ${size + 20} ${size + 20}" width="600" height="600">
-  <rect fill="#faf8f5" stroke="#1e293b" stroke-width="2" x="${-half}" y="${-half}" width="${size}" height="${size}" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="${centerX - width / 2 - pad} ${centerY - height / 2 - pad} ${width + pad * 2} ${height + pad * 2}" width="800" height="800">
+  <rect fill="#faf8f5" stroke="#1e293b" stroke-width="2" x="${centerX - width / 2}" y="${centerY - height / 2}" width="${width}" height="${height}" />
 `;
-    this.model.creases.forEach(c => {
-      const color = c.type === 'mountain' ? '#ef4444' : (c.type === 'valley' ? '#3b82f6' : '#1e293b');
-      const dash = c.type === 'mountain' ? 'stroke-dasharray="8 3 2 3"' : (c.type === 'valley' ? 'stroke-dasharray="5 4"' : '');
-      svg += `  <line stroke="${color}" stroke-width="1.5" ${dash} x1="${c.x1}" y1="${c.y1}" x2="${c.x2}" y2="${c.y2}" />\n`;
+
+    elements.forEach(elem => {
+      let strokeHex = '#000000';
+      let dashAttr = '';
+      if (elem.stroke === 'mountain') {
+        strokeHex = '#ff0000';
+        dashAttr = 'stroke-dasharray="8 3 2 3"';
+      } else if (elem.stroke === 'valley') {
+        strokeHex = '#0000ff';
+        dashAttr = 'stroke-dasharray="5 4"';
+      } else if (elem.stroke === 'cut') {
+        strokeHex = '#00ff00';
+      }
+
+      if (elem.type === 'line') {
+        svg += `  <line stroke="${strokeHex}" stroke-width="1.5" ${dashAttr} x1="${elem.x1}" y1="${elem.y1}" x2="${elem.x2}" y2="${elem.y2}" />\n`;
+      } else if (elem.type === 'rect') {
+        svg += `  <rect stroke="${strokeHex}" stroke-width="2" fill="none" x="${elem.x}" y="${elem.y}" width="${elem.w}" height="${elem.h}" />\n`;
+      }
     });
+
     svg += `</svg>`;
     return svg;
   }
 }
+
