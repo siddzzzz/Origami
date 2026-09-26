@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { SpringMassOrigamiPhysicsEngine } from './SpringMassOrigamiPhysicsEngine.js';
+import { SinglePieceOrigamiSimulator } from './SinglePieceOrigamiSimulator.js';
 
 /**
  * ThreeDSceneManager
@@ -119,7 +119,7 @@ export class ThreeDSceneManager {
     if (this.paperMesh) {
       this.scene.remove(this.paperMesh.group);
     }
-    this.paperMesh = new SpringMassOrigamiPhysicsEngine(modelData);
+    this.paperMesh = new SinglePieceOrigamiSimulator(modelData);
     this.scene.add(this.paperMesh.group);
 
     this.currentStep = 0;
