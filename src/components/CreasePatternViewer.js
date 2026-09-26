@@ -74,11 +74,106 @@ export class CreasePatternViewer {
     this.model = model;
     this.resetView();
 
-    if (model && model.simUrl) {
+    if (model && model.svgData) {
+      this.parseSVGText(model.svgData);
+    } else if (model && model.simUrl) {
       this.loadPatternFromSVG(`/origamisim/assets/${model.simUrl}`);
     } else {
       this.parsedGeometry = null;
       this.render();
+    }
+  }
+
+  parseSVGText(text) {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(text, 'image/svg+xml');
+
+      const elements = [];
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+      const updateBounds = (x, y) => {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      };
+
+      // 1. Process <line>
+      const lines = doc.querySelectorAll('line');
+      lines.forEach(l => {
+        const x1 = parseFloat(l.getAttribute('x1') || '0');
+        const y1 = parseFloat(l.getAttribute('y1') || '0');
+        const x2 = parseFloat(l.getAttribute('x2') || '0');
+        const y2 = parseFloat(l.getAttribute('y2') || '0');
+        const stroke = (l.getAttribute('stroke') || l.style.stroke || '#000000').toLowerCase();
+        const opacity = parseFloat(l.getAttribute('opacity') || l.style.opacity || '1.0');
+
+        updateBounds(x1, y1);
+        updateBounds(x2, y2);
+
+        elements.push({
+          type: 'line',
+          x1, y1, x2, y2,
+          stroke: this.classifyStroke(stroke),
+          opacity
+        });
+      });
+
+      // 2. Process <rect>
+      const rects = doc.querySelectorAll('rect');
+      rects.forEach(r => {
+        const x = parseFloat(r.getAttribute('x') || '0');
+        const y = parseFloat(r.getAttribute('y') || '0');
+        const w = parseFloat(r.getAttribute('width') || '0');
+        const h = parseFloat(r.getAttribute('height') || '0');
+        const stroke = (r.getAttribute('stroke') || r.style.stroke || '#000000').toLowerCase();
+
+        updateBounds(x, y);
+        updateBounds(x + w, y + h);
+
+        elements.push({
+          type: 'rect',
+          x, y, w, h,
+          stroke: this.classifyStroke(stroke),
+          opacity: 1.0
+        });
+      });
+
+      // 3. Process <path>
+      const paths = doc.querySelectorAll('path');
+      paths.forEach(p => {
+        const d = p.getAttribute('d') || '';
+        const stroke = (p.getAttribute('stroke') || p.style.stroke || '#000000').toLowerCase();
+        const opacity = parseFloat(p.getAttribute('opacity') || p.style.opacity || '1.0');
+        const pathLines = this.parsePathToLines(d, updateBounds);
+
+        pathLines.forEach(l => {
+          elements.push({
+            type: 'line',
+            x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2,
+            stroke: this.classifyStroke(stroke),
+            opacity
+          });
+        });
+      });
+
+      const width = Math.max(1, maxX - minX);
+      const height = Math.max(1, maxY - minY);
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      this.parsedGeometry = {
+        elements,
+        minX, minY, maxX, maxY,
+        width, height,
+        centerX, centerY,
+        maxDim: Math.max(width, height)
+      };
+      this.cachedUrl = null;
+      this.render();
+    } catch (err) {
+      console.warn('Failed to parse crease pattern SVG text:', err);
     }
   }
 
