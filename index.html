@@ -154,6 +154,21 @@
             <input type="file" id="file-mesh-input" accept=".obj" style="display: none;" />
           </div>
 
+          <div style="margin: 14px 0 8px 0; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">
+            Or Load Sample 3D Test Models:
+          </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
+            <button class="tool-btn btn-preset-model" data-obj="/test_models/bird_lowpoly.obj" style="flex: 1; justify-content: center; padding: 8px 12px;">
+              🦅 Bird Mesh
+            </button>
+            <button class="tool-btn btn-preset-model" data-obj="/test_models/quadruped_lowpoly.obj" style="flex: 1; justify-content: center; padding: 8px 12px;">
+              🐕 Quadruped
+            </button>
+            <button class="tool-btn btn-preset-model" data-obj="/test_models/star_pyramid.obj" style="flex: 1; justify-content: center; padding: 8px 12px;">
+              ⭐ Star Pyramid
+            </button>
+          </div>
+
           <div style="background: var(--bg-primary); border-radius: var(--radius-sm); padding: 12px; font-size: 12px; color: var(--text-secondary); font-family: var(--font-mono);">
             💡 Pipeline: 3D Hull Analysis &rarr; Stick Skeleton &rarr; Circle-Packing / Crease Pattern &rarr; Step Fold Simulator
           </div>
