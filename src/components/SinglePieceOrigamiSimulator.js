@@ -241,25 +241,25 @@ export class SinglePieceOrigamiSimulator {
     this.altHinge.position.set(s / 2, 0, -s / 2);
     this.altAxis = new THREE.Vector3(1, 0, -1).normalize();
 
-    // Q2 attached in altHinge (relative to pivot (s/2, 0, -s/2)):
-    // Vertices in local coords:
-    // (0,0,0) -> (-s/2, 0, s/2)
-    // (s,0,-s) -> (s/2, 0, -s/2)
-    // (s,0,s) -> (s/2, 0, s/2)
+    // Q2 attached in altHinge (pivot is at (s/2, 0, -s/2)):
+    // World vertices of Q2:
+    // P0: (0, 0, 0)   -> Local: (0 - s/2, 0, 0 - (-s/2)) = (-s/2, 0, s/2)
+    // P1: (s, 0, -s)  -> Local: (s - s/2, 0, -s - (-s/2)) = (s/2, 0, -s/2)
+    // P2: (s, 0, s)   -> Local: (s - s/2, 0, s - (-s/2)) = (s/2, 0, 3s/2)
     const q2Local = [
       [-s / 2, 0, s / 2],
       [s / 2, 0, -s / 2],
-      [s / 2, 0, s / 2]
+      [s / 2, 0, 3 * s / 2]
     ];
     this.meshQ2 = this.createFacetMesh(q2Local, [0, 1, 2]);
     this.altHinge.add(this.meshQ2);
 
     // Q3 Folded Leaf (attached inside altHinge with slight 0.04 elevation offset):
-    // When Step 1 is closed, Q3 rests directly on top of Q2!
+    // When Step 1 is folded onto Q2, it rests directly on top of Q2:
     const q3FoldedLocal = [
       [-s / 2, 0.04, s / 2],
       [s / 2, 0.04, -s / 2],
-      [s / 2, 0.04, s / 2]
+      [s / 2, 0.04, 3 * s / 2]
     ];
     this.meshQ3Folded = this.createFacetMesh(q3FoldedLocal, [0, 1, 2]);
     this.meshQ3Folded.visible = false;
