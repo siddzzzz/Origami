@@ -74,13 +74,65 @@ export class CreasePatternViewer {
     this.model = model;
     this.resetView();
 
-    if (model && model.svgData) {
+    if (model && model.foldData) {
+      this.parseFoldData(model.foldData);
+    } else if (model && model.svgData) {
       this.parseSVGText(model.svgData);
     } else if (model && model.simUrl) {
       this.loadPatternFromSVG(`/origamisim/assets/${model.simUrl}`);
     } else {
       this.parsedGeometry = null;
       this.render();
+    }
+  }
+
+  parseFoldData(foldData) {
+    try {
+      const coords = foldData.vertices_coords;
+      const elements = [];
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+      const updateBounds = (x, y) => {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      };
+
+      coords.forEach(v => updateBounds(v[0], v[1]));
+
+      foldData.edges_vertices.forEach((edge, idx) => {
+        const v1 = coords[edge[0]];
+        const v2 = coords[edge[1]];
+        const assign = foldData.edges_assignment[idx];
+        const stroke = assign === 'M' ? 'mountain' : assign === 'V' ? 'valley' : assign === 'C' ? 'cut' : assign === 'F' ? 'facet' : 'border';
+        elements.push({
+          type: 'line',
+          x1: v1[0],
+          y1: v1[1],
+          x2: v2[0],
+          y2: v2[1],
+          stroke,
+          opacity: 1.0
+        });
+      });
+
+      const width = Math.max(1, maxX - minX);
+      const height = Math.max(1, maxY - minY);
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      this.parsedGeometry = {
+        elements,
+        minX, minY, maxX, maxY,
+        width, height,
+        centerX, centerY,
+        maxDim: Math.max(width, height)
+      };
+      this.cachedUrl = null;
+      this.render();
+    } catch (err) {
+      console.warn('Failed to parse foldData in CreasePatternViewer:', err);
     }
   }
 

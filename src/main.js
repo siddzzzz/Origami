@@ -112,24 +112,29 @@ function loadModelInSim(model) {
   stepSlider.value = '0';
   setSimFoldPercent(0);
 
-  const win = getSimWindow();
-  if (win && win.globals) {
-    try {
-      if (model.foldData && win.globals.pattern) {
-        // Direct .FOLD passing preserves exact 3D vertices, closed faces, and numerical fold angles
-        win.globals.pattern.setFoldData(JSON.parse(JSON.stringify(model.foldData)), true);
-      } else if (model.svgData && win.globals.pattern) {
-        const svgUri = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(model.svgData);
-        win.globals.pattern.loadSVG(svgUri);
-      } else if (model.simUrl && win.globals.importer) {
-        win.globals.importer.importDemoFile(model.simUrl);
-      } else if (win.$ && model.simUrl) {
-        win.$(`.demo[data-url='${model.simUrl}']`).click();
+  const applyToSim = (retries = 5) => {
+    const win = getSimWindow();
+    if (win && win.globals && win.globals.pattern) {
+      try {
+        if (model.foldData) {
+          win.globals.pattern.setFoldData(JSON.parse(JSON.stringify(model.foldData)), true);
+        } else if (model.svgData) {
+          const svgUri = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(model.svgData);
+          win.globals.pattern.loadSVG(svgUri);
+        } else if (model.simUrl && win.globals.importer) {
+          win.globals.importer.importDemoFile(model.simUrl);
+        } else if (win.$ && model.simUrl) {
+          win.$(`.demo[data-url='${model.simUrl}']`).click();
+        }
+      } catch (e) {
+        console.warn('Error loading model into origami simulator:', e);
       }
-    } catch (e) {
-      console.warn('Error loading model into origami simulator:', e);
+    } else if (retries > 0) {
+      setTimeout(() => applyToSim(retries - 1), 200);
     }
-  }
+  };
+
+  applyToSim();
 }
 
 /**
