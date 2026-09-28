@@ -2,6 +2,8 @@ import { CLEAN_ORIGAMI_MODELS } from './data/cleanOrigamiModels.js';
 import { CreasePatternViewer } from './components/CreasePatternViewer.js';
 import { MeshSkeletonizer } from './algorithms/MeshSkeletonizer.js';
 import { OrigamiUniversalSolver } from './algorithms/OrigamiUniversalSolver.js';
+import { OrigamiFitnessEvaluator } from './algorithms/OrigamiFitnessEvaluator.js';
+import { OrigamiAIOptimizer } from './algorithms/OrigamiAIOptimizer.js';
 
 // DOM elements
 const modelSelect = document.getElementById('model-select');
@@ -23,6 +25,24 @@ const btnCloseModal = document.getElementById('btn-close-modal');
 const dropzone = document.getElementById('dropzone');
 const fileMeshInput = document.getElementById('file-mesh-input');
 const presetButtons = document.querySelectorAll('.btn-preset-model');
+
+// AI HUD and Ghost Mesh elements
+const btnToggleGhost = document.getElementById('btn-toggle-ghost');
+const btnOptimizeAi = document.getElementById('btn-optimize-ai');
+const aiHud = document.getElementById('ai-hud');
+const hudStatus = document.getElementById('hud-status');
+const hudGen = document.getElementById('hud-gen');
+const hudLoss = document.getElementById('hud-loss');
+const hudScore = document.getElementById('hud-score');
+const btnStepAi = document.getElementById('btn-step-ai');
+const btnRunAiLoop = document.getElementById('btn-run-ai-loop');
+
+// Active AI and 3D Target State
+let activeMeshTarget = null;
+let activeSkeleton = null;
+let activeOptimizer = null;
+let isGhostVisible = true;
+let isAiLoopRunning = false;
 
 // Initialize 2D Crease Pattern Viewer
 const creaseViewer = new CreasePatternViewer(creaseCanvas);
@@ -107,8 +127,24 @@ async function process3DMesh(objText, modelName = 'Synthesized 3D Model') {
   try {
     const meshData = MeshSkeletonizer.parseOBJ(objText);
     const skeleton = MeshSkeletonizer.extractSkeleton(meshData);
+    
+    activeMeshTarget = meshData;
+    activeSkeleton = skeleton;
+    activeOptimizer = new OrigamiAIOptimizer(skeleton, meshData.vertices);
+
     const foldData = OrigamiUniversalSolver.synthesizeFoldPattern(skeleton);
     const svgData = OrigamiUniversalSolver.foldToSVG(foldData);
+
+    // Initial loss evaluation
+    const initialPaperPoints = foldData.vertices_coords.map(v => ({ x: v[0], y: v[1], z: v[2] }));
+    const initialEval = OrigamiFitnessEvaluator.evaluateFitness(initialPaperPoints, meshData.vertices);
+
+    // Update AI HUD
+    aiHud.classList.remove('hidden');
+    hudStatus.textContent = 'Initialized';
+    hudGen.textContent = '0';
+    hudLoss.textContent = initialEval.totalLoss.toFixed(3);
+    hudScore.textContent = `${initialEval.scorePercent}%`;
 
     // Build model structure for CreasePatternViewer
     const customModel = {
@@ -148,6 +184,17 @@ async function process3DMesh(objText, modelName = 'Synthesized 3D Model') {
     modelSelect.value = customModel.id;
 
     loadModelInSim(customModel);
+    
+    // Set 3D ghost mesh in simulator
+    const win = getSimWindow();
+    if (win && win.globals && win.globals.threeView) {
+      if (isGhostVisible) {
+        win.globals.threeView.setGhostMesh(meshData);
+      } else {
+        win.globals.threeView.removeGhostMesh();
+      }
+    }
+
     modalImport.classList.add('hidden');
   } catch (err) {
     console.error('Failed to solve 3D mesh into origami:', err);
@@ -336,6 +383,102 @@ presetButtons.forEach(btn => {
       alert('Error loading sample model: ' + err.message);
     }
   });
+});
+
+// Ghost target mesh toggle
+btnToggleGhost.addEventListener('click', () => {
+  isGhostVisible = !isGhostVisible;
+  const win = getSimWindow();
+  if (win && win.globals && win.globals.threeView) {
+    if (isGhostVisible && activeMeshTarget) {
+      win.globals.threeView.setGhostMesh(activeMeshTarget);
+      btnToggleGhost.style.borderColor = '#38bdf8';
+      btnToggleGhost.style.color = '#38bdf8';
+    } else {
+      win.globals.threeView.removeGhostMesh();
+      btnToggleGhost.style.borderColor = '';
+      btnToggleGhost.style.color = '';
+    }
+  }
+});
+
+// Single Step AI Generation
+btnStepAi.addEventListener('click', () => {
+  if (!activeOptimizer) return;
+  runAiStep();
+});
+
+function runAiStep() {
+  if (!activeOptimizer) return;
+  hudStatus.textContent = 'Optimizing...';
+  const result = activeOptimizer.stepGeneration();
+  hudGen.textContent = result.generation;
+  hudLoss.textContent = result.bestLoss.toFixed(3);
+  hudScore.textContent = `${result.bestScore}%`;
+  hudStatus.textContent = 'Active';
+
+  // Update 2D and 3D with best candidate
+  const optimizedModel = {
+    id: currentModel.id,
+    name: currentModel.name,
+    paperSize: 1000,
+    foldData: result.bestPattern.foldData,
+    svgData: result.bestPattern.svgData,
+    steps: [
+      {
+        step: 1,
+        description: `Gen ${result.generation} (Fit: ${result.bestScore}%)`,
+        creases: result.bestPattern.foldData.edges_vertices.map((e, idx) => {
+          const v1 = result.bestPattern.foldData.vertices_coords[e[0]];
+          const v2 = result.bestPattern.foldData.vertices_coords[e[1]];
+          const assign = result.bestPattern.foldData.edges_assignment[idx];
+          return {
+            x1: v1[0],
+            y1: v1[1],
+            x2: v2[0],
+            y2: v2[1],
+            type: assign === 'M' ? 'mountain' : assign === 'V' ? 'valley' : 'facet'
+          };
+        })
+      }
+    ]
+  };
+
+  loadModelInSim(optimizedModel);
+}
+
+// Run 25 Generations Loop
+btnRunAiLoop.addEventListener('click', async () => {
+  if (!activeOptimizer) return;
+  if (isAiLoopRunning) {
+    isAiLoopRunning = false;
+    btnRunAiLoop.textContent = 'Run 25 Gens';
+    hudStatus.textContent = 'Paused';
+    return;
+  }
+
+  isAiLoopRunning = true;
+  btnRunAiLoop.textContent = 'Pause AI';
+  hudStatus.textContent = 'Running Loop...';
+
+  for (let i = 0; i < 25; i++) {
+    if (!isAiLoopRunning) break;
+    runAiStep();
+    await new Promise(r => setTimeout(r, 60));
+  }
+
+  isAiLoopRunning = false;
+  btnRunAiLoop.textContent = 'Run 25 Gens';
+  hudStatus.textContent = 'Finished';
+});
+
+// Top bar AI optimize shortcut
+btnOptimizeAi.addEventListener('click', () => {
+  if (!activeOptimizer) {
+    modalImport.classList.remove('hidden');
+    return;
+  }
+  btnRunAiLoop.click();
 });
 
 // Initial boot
