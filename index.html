@@ -113,6 +113,27 @@
           <div class="canvas-container">
             <iframe id="origami-frame" class="sim-iframe" src="/origamisim/index.html"></iframe>
           </div>
+
+          <!-- FLOATING 3D TARGET MESH INSPECTOR (Shows the imported OBJ) -->
+          <div id="target-mesh-inspector" class="target-mesh-card hidden">
+            <div class="inspector-header">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                </svg>
+                <span style="font-weight: 600; font-size: 11px; color: #f8fafc; text-transform: uppercase; letter-spacing: 0.05em;">Target 3D Mesh</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <button id="btn-rotate-target" class="icon-btn" title="Toggle Auto-Rotation">🔄</button>
+                <button id="btn-minimize-target" class="icon-btn" title="Close / Hide">&times;</button>
+              </div>
+            </div>
+            <div id="target-mesh-container" class="target-mesh-viewport"></div>
+            <div class="inspector-footer">
+              <span id="target-stats-verts" style="color: #94a3b8; font-size: 10px; font-family: var(--font-mono);">0 Vertices</span>
+              <span id="target-stats-faces" style="color: #94a3b8; font-size: 10px; font-family: var(--font-mono);">0 Faces</span>
+            </div>
+          </div>
         </section>
       </main>
 

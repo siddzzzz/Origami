@@ -4,6 +4,7 @@ import { MeshSkeletonizer } from './algorithms/MeshSkeletonizer.js';
 import { OrigamiUniversalSolver } from './algorithms/OrigamiUniversalSolver.js';
 import { OrigamiFitnessEvaluator } from './algorithms/OrigamiFitnessEvaluator.js';
 import { OrigamiAIOptimizer } from './algorithms/OrigamiAIOptimizer.js';
+import { TargetMeshViewer } from './components/TargetMeshViewer.js';
 
 // DOM elements
 const modelSelect = document.getElementById('model-select');
@@ -36,6 +37,17 @@ const hudLoss = document.getElementById('hud-loss');
 const hudScore = document.getElementById('hud-score');
 const btnStepAi = document.getElementById('btn-step-ai');
 const btnRunAiLoop = document.getElementById('btn-run-ai-loop');
+
+// Target Mesh Inspector elements
+const targetMeshInspector = document.getElementById('target-mesh-inspector');
+const targetMeshContainer = document.getElementById('target-mesh-container');
+const btnRotateTarget = document.getElementById('btn-rotate-target');
+const btnMinimizeTarget = document.getElementById('btn-minimize-target');
+const targetStatsVerts = document.getElementById('target-stats-verts');
+const targetStatsFaces = document.getElementById('target-stats-faces');
+
+// Initialize 3D Target Mesh Viewer
+const targetViewer = new TargetMeshViewer(targetMeshContainer);
 
 // Active AI and 3D Target State
 let activeMeshTarget = null;
@@ -185,6 +197,13 @@ async function process3DMesh(objText, modelName = 'Synthesized 3D Model') {
 
     loadModelInSim(customModel);
     
+    // Load target mesh into dedicated 3D Target Inspector
+    targetMeshInspector.classList.remove('hidden');
+    targetViewer.loadMesh(meshData);
+    targetViewer.onResize();
+    targetStatsVerts.textContent = `${meshData.vertices ? meshData.vertices.length : 0} Vertices`;
+    targetStatsFaces.textContent = `${meshData.faces ? meshData.faces.length : 0} Faces`;
+
     // Set 3D ghost mesh in simulator
     const win = getSimWindow();
     if (win && win.globals && win.globals.threeView) {
@@ -385,9 +404,24 @@ presetButtons.forEach(btn => {
   });
 });
 
+// Target Mesh Inspector Controls
+btnRotateTarget.addEventListener('click', () => {
+  targetViewer.toggleAutoRotate();
+  btnRotateTarget.style.opacity = targetViewer.autoRotate ? '1' : '0.5';
+});
+
+btnMinimizeTarget.addEventListener('click', () => {
+  targetMeshInspector.classList.toggle('hidden');
+});
+
 // Ghost target mesh toggle
 btnToggleGhost.addEventListener('click', () => {
   isGhostVisible = !isGhostVisible;
+  // Also keep inspector open when ghost is active
+  if (isGhostVisible && activeMeshTarget) {
+    targetMeshInspector.classList.remove('hidden');
+    targetViewer.onResize();
+  }
   const win = getSimWindow();
   if (win && win.globals && win.globals.threeView) {
     if (isGhostVisible && activeMeshTarget) {
