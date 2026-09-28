@@ -185,6 +185,8 @@ async function process3DMesh(objText, modelName = 'Synthesized 3D Model') {
       ]
     };
 
+    customModelsMap.set(customModel.id, customModel);
+
     // Add option in select dropdown if not present
     let opt = document.querySelector(`option[value="${customModel.id}"]`);
     if (!opt) {
@@ -275,10 +277,14 @@ function togglePlay() {
   else play();
 }
 
+// Registry of all models (default presets + custom synthesized meshes)
+const customModelsMap = new Map();
+
 // UI Listeners
 modelSelect.addEventListener('change', (e) => {
   pause();
-  const selected = CLEAN_ORIGAMI_MODELS.find(m => m.id === e.target.value);
+  const val = e.target.value;
+  const selected = customModelsMap.get(val) || CLEAN_ORIGAMI_MODELS.find(m => m.id === val);
   if (selected) {
     loadModelInSim(selected);
   }
@@ -478,6 +484,7 @@ function runAiStep() {
     ]
   };
 
+  customModelsMap.set(optimizedModel.id, optimizedModel);
   loadModelInSim(optimizedModel);
 }
 
