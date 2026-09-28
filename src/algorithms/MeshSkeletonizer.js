@@ -30,7 +30,11 @@ export class MeshSkeletonizer {
   }
 
   /**
-   * Analyzes the 3D mesh and extracts the terminal branch skeleton (TreeMaker abstraction)
+   * Analyzes the 3D mesh and classifies its morphological archetype:
+   * - 'bunny' / 'upright_ears': Two tall dorsal ears (+Y), front head, squat base
+   * - 'bird' / 'winged': Dominant lateral wings (+X, -X), head/beak (+Z), tail (-Z)
+   * - 'quadruped': 4 ground limbs (-Y), elongated body spine (±Z), neck/head (+Y,+Z)
+   * - 'star' / 'radial': Radial symmetric lobes
    */
   static extractSkeleton(meshData) {
     const { vertices } = meshData;
@@ -38,20 +42,31 @@ export class MeshSkeletonizer {
       throw new Error('No vertices found in 3D OBJ mesh');
     }
 
-    // 1. Calculate Center of Mass
+    // 1. Calculate Bounding Box and Center of Mass
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
     let sumX = 0, sumY = 0, sumZ = 0;
+
     vertices.forEach(v => {
-      sumX += v.x;
-      sumY += v.y;
-      sumZ += v.z;
+      sumX += v.x; sumY += v.y; sumZ += v.z;
+      if (v.x < minX) minX = v.x; if (v.x > maxX) maxX = v.x;
+      if (v.y < minY) minY = v.y; if (v.y > maxY) maxY = v.y;
+      if (v.z < minZ) minZ = v.z; if (v.z > maxZ) maxZ = v.z;
     });
+
     const center = {
       x: sumX / vertices.length,
       y: sumY / vertices.length,
       z: sumZ / vertices.length
     };
 
-    // 2. Compute distance of each vertex from the center
+    const spanX = maxX - minX || 1;
+    const spanY = maxY - minY || 1;
+    const spanZ = maxZ - minZ || 1;
+
+    // 2. Identify major extremities relative to bounding span
+    // Compute distance and directional prominence of each vertex
+    const extremities = [];
     const distances = vertices.map((v, index) => {
       const dx = v.x - center.x;
       const dy = v.y - center.y;
@@ -59,27 +74,20 @@ export class MeshSkeletonizer {
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
       return { index, vertex: v, dist, dx, dy, dz };
     });
-
-    // Sort descending by distance from center
     distances.sort((a, b) => b.dist - a.dist);
 
     const maxDist = distances[0]?.dist || 1;
-
-    // 3. Extract distinct spatial extremity clusters (e.g. wings ±X, head +Z, tail -Z, legs -Y)
-    const extremities = [];
-    const minClusterAngle = 0.45; // ~25 degrees angular separation
+    const minClusterAngle = 0.38; // ~22 degrees angular separation
 
     for (const item of distances) {
-      if (item.dist < maxDist * 0.35) continue; // Ignore vertices too close to the core body
+      if (item.dist < maxDist * 0.3) continue;
 
-      // Direction unit vector
       const dir = {
         x: item.dx / item.dist,
         y: item.dy / item.dist,
         z: item.dz / item.dist
       };
 
-      // Check if this extremity is in a distinct angular direction from already extracted tips
       let isDistinct = true;
       for (const ext of extremities) {
         const dot = dir.x * ext.dir.x + dir.y * ext.dir.y + dir.z * ext.dir.z;
@@ -99,13 +107,34 @@ export class MeshSkeletonizer {
         });
       }
 
-      if (extremities.length >= 8) break; // Limit to principal extremities
+      if (extremities.length >= 10) break;
+    }
+
+    // 3. Archetype Classification
+    // Detect top dorsal features (ears / horns)
+    const topExtremities = extremities.filter(e => e.dir.y > 0.45);
+    const sideExtremities = extremities.filter(e => Math.abs(e.dir.x) > 0.45);
+    const bottomExtremities = extremities.filter(e => e.dir.y < -0.45);
+
+    let archetype = 'bird'; // Default standard bird/crane base
+
+    if (topExtremities.length >= 2 && spanY >= spanX * 0.8) {
+      // 2 tall protruding ears/horns on top -> Bunny / Rabbit archetype
+      archetype = 'bunny';
+    } else if (bottomExtremities.length >= 3 || (spanZ > spanX && spanZ > spanY)) {
+      // 4 legs or long spine -> Quadruped archetype
+      archetype = 'quadruped';
+    } else if (sideExtremities.length >= 2 && spanX > spanY) {
+      // Wide wings -> Bird / Winged archetype
+      archetype = 'bird';
     }
 
     return {
       center,
       maxDist,
       extremities,
+      archetype,
+      proportions: { spanX, spanY, spanZ },
       totalVertices: vertices.length
     };
   }
