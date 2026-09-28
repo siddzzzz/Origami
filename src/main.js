@@ -115,12 +115,12 @@ function loadModelInSim(model) {
   const win = getSimWindow();
   if (win && win.globals) {
     try {
-      if (model.svgData && win.globals.pattern) {
-        // Pass SVG data URI to pattern.loadSVG which executes full FOLD conversion and triangulation pipeline
+      if (model.foldData && win.globals.pattern) {
+        // Direct .FOLD passing preserves exact 3D vertices, closed faces, and numerical fold angles
+        win.globals.pattern.setFoldData(JSON.parse(JSON.stringify(model.foldData)), true);
+      } else if (model.svgData && win.globals.pattern) {
         const svgUri = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(model.svgData);
         win.globals.pattern.loadSVG(svgUri);
-      } else if (model.foldData && win.globals.pattern) {
-        win.globals.pattern.setFoldData(model.foldData, true);
       } else if (model.simUrl && win.globals.importer) {
         win.globals.importer.importDemoFile(model.simUrl);
       } else if (win.$ && model.simUrl) {
