@@ -27,123 +27,104 @@ export class OrigamiAIOptimizer {
   }
 
   initBaseGenome() {
-    // Genome represents parameterized variables of the crease pattern:
-    // [radius_multiplier_1, angle_offset_1, wing_spread_1, ... flap_n, valley_angle, mountain_angle]
+    // Genome represents parameterized variables of the flat-foldable origami base:
+    // [inset ratios for cardinal flaps, mountain/valley fold angles, petal stretch factors]
     const genes = [];
-    this.skeleton.extremities.forEach((ext, i) => {
+    // 4 cardinal flaps (Bottom, Right, Top, Left)
+    for (let i = 0; i < 4; i++) {
       genes.push({
-        radiusMult: 1.0,      // Scale of flap radius
-        angleOffset: 0.0,     // 2D perimeter angle offset (-0.3 to +0.3 rad)
-        wingSpread: 0.6,      // Width of mountain hinge wings (0.3 to 1.0)
-        innerDepth: 0.2       // Root offset from center
+        insetRatio: 0.28,      // Flap root distance from center (0.1 to 0.45)
+        angleOffset: 0.0,      // Angular shift of root
+        petalScale: 1.0        // Length factor
       });
-    });
+    }
 
     this.baseGenome = {
       flapGenes: genes,
       diagonalValleyAngle: 90.0,
-      mountainFoldAngle: -180.0
+      mountainFoldAngle: -180.0,
+      axialValleyAngle: 180.0
     };
 
     this.bestGenome = JSON.parse(JSON.stringify(this.baseGenome));
   }
 
   /**
-   * Synthesizes a candidate FOLD pattern from a specific genome
+   * Synthesizes a candidate FOLD pattern from a specific genome.
+   * Produces a strictly closed-polygon flat-foldable origami base (Kawasaki/Maekawa compliant)
+   * so the GPU physics engine can triangulate faces and compute dihedral bending springs.
    */
   synthesizeCandidate(genome) {
     const paperSize = 1000;
     const half = paperSize / 2;
 
-    const packedFlaps = this.skeleton.extremities.map((ext, i) => {
-      const gene = genome.flapGenes[i] || { radiusMult: 1.0, angleOffset: 0.0, wingSpread: 0.6, innerDepth: 0.2 };
-      const baseAngle = Math.atan2(ext.dir.x, ext.dir.z);
-      const angle = baseAngle + gene.angleOffset;
-
-      const cosA = Math.cos(angle);
-      const sinA = Math.sin(angle);
-      const absCos = Math.abs(cosA);
-      const absSin = Math.abs(sinA);
-
-      let px = 0, py = 0;
-      if (absCos > absSin) {
-        px = cosA > 0 ? half : -half;
-        py = px * (sinA / cosA);
-      } else {
-        py = sinA > 0 ? half : -half;
-        px = py * (cosA / sinA);
-      }
-
-      const radius = ext.normalizedLength * (paperSize * 0.35) * Math.max(0.3, Math.min(2.0, gene.radiusMult));
-
-      return {
-        id: i,
-        x: px,
-        y: py,
-        radius,
-        gene,
-        extremity: ext
-      };
-    });
-
-    const vertices_coords = [
-      [-half, -half, 0],
-      [half, -half, 0],
-      [half, half, 0],
-      [-half, half, 0],
-      [0, 0, 0]
+    const genes = genome.flapGenes || [
+      { insetRatio: 0.28 },
+      { insetRatio: 0.28 },
+      { insetRatio: 0.28 },
+      { insetRatio: 0.28 }
     ];
 
-    const edges_vertices = [[0, 1], [1, 2], [2, 3], [3, 0]];
-    const edges_assignment = ['B', 'B', 'B', 'B'];
-    const edges_foldAngle = [0, 0, 0, 0];
+    const q0 = Math.max(0.08, Math.min(0.46, genes[0]?.insetRatio ?? 0.28)) * paperSize; // Bottom
+    const q1 = Math.max(0.08, Math.min(0.46, genes[1]?.insetRatio ?? 0.28)) * paperSize; // Right
+    const q2 = Math.max(0.08, Math.min(0.46, genes[2]?.insetRatio ?? 0.28)) * paperSize; // Top
+    const q3 = Math.max(0.08, Math.min(0.46, genes[3]?.insetRatio ?? 0.28)) * paperSize; // Left
 
-    packedFlaps.forEach(flap => {
-      const dx = flap.x;
-      const dy = flap.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist === 0) return;
+    const vertices_coords = [
+      [-half, -half, 0], // 0: Bottom-Left
+      [half, -half, 0],  // 1: Bottom-Right
+      [half, half, 0],   // 2: Top-Right
+      [-half, half, 0],  // 3: Top-Left
+      [0, 0, 0],         // 4: Center
+      [0, -half, 0],     // 5: Bottom Mid
+      [half, 0, 0],      // 6: Right Mid
+      [0, half, 0],      // 7: Top Mid
+      [-half, 0, 0],     // 8: Left Mid
+      [0, -q0, 0],       // 9: Bottom Flap Root
+      [q1, 0, 0],        // 10: Right Flap Root
+      [0, q2, 0],        // 11: Top Flap Root
+      [-q3, 0, 0]        // 12: Left Flap Root
+    ];
 
-      const innerDist = Math.max(half * flap.gene.innerDepth, dist - flap.radius);
-      const flapRootX = (dx / dist) * innerDist;
-      const flapRootY = (dy / dist) * innerDist;
+    // Closed boundary perimeter
+    const edges_vertices = [
+      [0, 5], [5, 1], [1, 6], [6, 2], [2, 7], [7, 3], [3, 8], [8, 0]
+    ];
+    const edges_assignment = ['B', 'B', 'B', 'B', 'B', 'B', 'B', 'B'];
+    const edges_foldAngle = [0, 0, 0, 0, 0, 0, 0, 0];
 
-      const rootIdx = vertices_coords.length;
-      vertices_coords.push([flapRootX, flapRootY, 0]);
-
-      edges_vertices.push([4, rootIdx]);
-      edges_assignment.push('V');
-      edges_foldAngle.push(genome.diagonalValleyAngle);
-
-      const spread = flap.radius * flap.gene.wingSpread;
-      const perpX = (-dy / dist) * spread;
-      const perpY = (dx / dist) * spread;
-
-      const wingL = vertices_coords.length;
-      vertices_coords.push([flapRootX + perpX, flapRootY + perpY, 0]);
-      const wingR = vertices_coords.length;
-      vertices_coords.push([flapRootX - perpX, flapRootY - perpY, 0]);
-
-      edges_vertices.push([rootIdx, wingL]);
-      edges_assignment.push('M');
-      edges_foldAngle.push(genome.mountainFoldAngle);
-
-      edges_vertices.push([rootIdx, wingR]);
-      edges_assignment.push('M');
-      edges_foldAngle.push(genome.mountainFoldAngle);
-
-      edges_vertices.push([wingL, 4]);
-      edges_assignment.push('F');
-      edges_foldAngle.push(0);
-
-      edges_vertices.push([wingR, 4]);
-      edges_assignment.push('F');
-      edges_foldAngle.push(0);
-    });
-
+    // Main diagonal valley folds (Corner to Center)
+    const diagValleyAngle = genome.diagonalValleyAngle ?? 90;
     edges_vertices.push([0, 4], [1, 4], [2, 4], [3, 4]);
     edges_assignment.push('V', 'V', 'V', 'V');
-    edges_foldAngle.push(genome.diagonalValleyAngle, genome.diagonalValleyAngle, genome.diagonalValleyAngle, genome.diagonalValleyAngle);
+    edges_foldAngle.push(diagValleyAngle, diagValleyAngle, diagValleyAngle, diagValleyAngle);
+
+    // Flap petal mountain creases radiating outward from roots to corners
+    const mountainAngle = genome.mountainFoldAngle ?? -180;
+    edges_vertices.push(
+      [0, 9], [1, 9],
+      [1, 10], [2, 10],
+      [2, 11], [3, 11],
+      [3, 12], [0, 12]
+    );
+    edges_assignment.push('M', 'M', 'M', 'M', 'M', 'M', 'M', 'M');
+    edges_foldAngle.push(
+      mountainAngle, mountainAngle,
+      mountainAngle, mountainAngle,
+      mountainAngle, mountainAngle,
+      mountainAngle, mountainAngle
+    );
+
+    // Spine mountain creases from center to flap roots
+    edges_vertices.push([4, 9], [4, 10], [4, 11], [4, 12]);
+    edges_assignment.push('M', 'M', 'M', 'M');
+    edges_foldAngle.push(mountainAngle, mountainAngle, mountainAngle, mountainAngle);
+
+    // Valley axial folds from flap roots to outer edge midpoints
+    const axialValleyAngle = genome.axialValleyAngle ?? 180;
+    edges_vertices.push([9, 5], [10, 6], [11, 7], [12, 8]);
+    edges_assignment.push('V', 'V', 'V', 'V');
+    edges_foldAngle.push(axialValleyAngle, axialValleyAngle, axialValleyAngle, axialValleyAngle);
 
     const foldData = {
       file_spec: 1.1,
@@ -163,26 +144,23 @@ export class OrigamiAIOptimizer {
   /**
    * Generates a mutated genome from an existing genome
    */
-  mutateGenome(parentGenome, rate = 0.15) {
+  mutateGenome(parentGenome, rate = 0.2) {
     const child = JSON.parse(JSON.stringify(parentGenome));
     child.flapGenes.forEach(gene => {
       if (Math.random() < rate) {
-        gene.radiusMult += (Math.random() - 0.5) * 0.25;
-        gene.radiusMult = Math.max(0.4, Math.min(1.8, gene.radiusMult));
+        gene.insetRatio += (Math.random() - 0.5) * 0.08;
+        gene.insetRatio = Math.max(0.12, Math.min(0.42, gene.insetRatio));
       }
       if (Math.random() < rate) {
-        gene.angleOffset += (Math.random() - 0.5) * 0.15;
-        gene.angleOffset = Math.max(-0.4, Math.min(0.4, gene.angleOffset));
-      }
-      if (Math.random() < rate) {
-        gene.wingSpread += (Math.random() - 0.5) * 0.2;
-        gene.wingSpread = Math.max(0.2, Math.min(1.2, gene.wingSpread));
-      }
-      if (Math.random() < rate) {
-        gene.innerDepth += (Math.random() - 0.5) * 0.1;
-        gene.innerDepth = Math.max(0.05, Math.min(0.5, gene.innerDepth));
+        gene.petalScale += (Math.random() - 0.5) * 0.2;
+        gene.petalScale = Math.max(0.5, Math.min(1.5, gene.petalScale));
       }
     });
+
+    if (Math.random() < rate * 0.5) {
+      child.diagonalValleyAngle += (Math.random() - 0.5) * 20;
+      child.diagonalValleyAngle = Math.max(45, Math.min(135, child.diagonalValleyAngle));
+    }
 
     return child;
   }

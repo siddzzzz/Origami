@@ -9,130 +9,67 @@
 export class OrigamiUniversalSolver {
   /**
    * Generates a complete FOLD specification from a mesh skeleton
+   * Uses closed-polygon origami base topology (Kawasaki & Maekawa flat-foldable bases)
    */
   static synthesizeFoldPattern(skeleton, options = {}) {
     const { extremities } = skeleton;
     const paperSize = options.paperSize || 1000;
     const half = paperSize / 2;
+    const q = (options.insetRatio ?? 0.28) * paperSize; // Inset parameter for flap roots
 
-    // 1. Map 3D extremities to 2D circle centers on the sheet perimeter/corners
-    // Project 3D direction (X, Z) onto 2D sheet coordinates
-    const packedFlaps = extremities.map((ext, i) => {
-      // Angle in X-Z horizontal plane
-      const angle = Math.atan2(ext.dir.x, ext.dir.z);
-      
-      // Project to square boundary [-half, half]
-      const cosA = Math.cos(angle);
-      const sinA = Math.sin(angle);
-      const absCos = Math.abs(cosA);
-      const absSin = Math.abs(sinA);
-
-      let px = 0, py = 0;
-      if (absCos > absSin) {
-        px = cosA > 0 ? half : -half;
-        py = px * (sinA / cosA);
-      } else {
-        py = sinA > 0 ? half : -half;
-        px = py * (cosA / sinA);
-      }
-
-      // Radius is proportional to extremity length
-      const radius = ext.normalizedLength * (paperSize * 0.35);
-
-      return {
-        id: i,
-        name: `Flap ${i + 1}`,
-        x: px,
-        y: py,
-        radius,
-        extremity: ext
-      };
-    });
-
-    // 2. Build vertices array
+    // 1. Core topological vertices
+    // [0..3]: 4 outer corners
+    // [4]: Center
+    // [5..8]: 4 Edge midpoints
+    // [9..12]: 4 Inset flap nodes (forming the 4 cardinal origami flaps)
     const vertices_coords = [
-      // Outer 4 square corners [0, 1, 2, 3]
-      [-half, -half, 0],
-      [half, -half, 0],
-      [half, half, 0],
-      [-half, half, 0],
-      // Center node [4]
-      [0, 0, 0]
+      [-half, -half, 0], // 0: Bottom-Left
+      [half, -half, 0],  // 1: Bottom-Right
+      [half, half, 0],   // 2: Top-Right
+      [-half, half, 0],  // 3: Top-Left
+      [0, 0, 0],         // 4: Center
+      [0, -half, 0],     // 5: Bottom Mid
+      [half, 0, 0],      // 6: Right Mid
+      [0, half, 0],      // 7: Top Mid
+      [-half, 0, 0],     // 8: Left Mid
+      [0, -q, 0],        // 9: Bottom Flap Root
+      [q, 0, 0],         // 10: Right Flap Root
+      [0, q, 0],         // 11: Top Flap Root
+      [-q, 0, 0]         // 12: Left Flap Root
     ];
 
     const edges_vertices = [
-      // Outer boundaries
-      [0, 1], [1, 2], [2, 3], [3, 0]
+      // Outer boundaries (Square Sheet Perimeter)
+      [0, 5], [5, 1], [1, 6], [6, 2], [2, 7], [7, 3], [3, 8], [8, 0]
     ];
-    const edges_assignment = ['B', 'B', 'B', 'B'];
-    const edges_foldAngle = [0, 0, 0, 0];
+    const edges_assignment = ['B', 'B', 'B', 'B', 'B', 'B', 'B', 'B'];
+    const edges_foldAngle = [0, 0, 0, 0, 0, 0, 0, 0];
 
-    // 3. Generate internal crease molecules
-    // Add flap base vertices
-    packedFlaps.forEach(flap => {
-      // Find direction from center (0,0) to flap
-      const dx = flap.x;
-      const dy = flap.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist === 0) return;
+    // Main diagonal valley folds (Corner to Center)
+    edges_vertices.push([0, 4], [1, 4], [2, 4], [3, 4]);
+    edges_assignment.push('V', 'V', 'V', 'V');
+    edges_foldAngle.push(90, 90, 90, 90);
 
-      const innerDist = Math.max(half * 0.2, dist - flap.radius);
-      const flapRootX = (dx / dist) * innerDist;
-      const flapRootY = (dy / dist) * innerDist;
+    // Flap petal mountain creases radiating outward from roots to corners
+    edges_vertices.push(
+      [0, 9], [1, 9],
+      [1, 10], [2, 10],
+      [2, 11], [3, 11],
+      [3, 12], [0, 12]
+    );
+    edges_assignment.push('M', 'M', 'M', 'M', 'M', 'M', 'M', 'M');
+    edges_foldAngle.push(-180, -180, -180, -180, -180, -180, -180, -180);
 
-      const rootIdx = vertices_coords.length;
-      vertices_coords.push([flapRootX, flapRootY, 0]);
+    // Spine mountain creases from center to flap roots
+    edges_vertices.push([4, 9], [4, 10], [4, 11], [4, 12]);
+    edges_assignment.push('M', 'M', 'M', 'M');
+    edges_foldAngle.push(-180, -180, -180, -180);
 
-      // Valley crease from root to center
-      edges_vertices.push([4, rootIdx]);
-      edges_assignment.push('V'); // Valley fold
-      edges_foldAngle.push(90);
+    // Valley axial folds from flap roots to outer edge midpoints
+    edges_vertices.push([9, 5], [10, 6], [11, 7], [12, 8]);
+    edges_assignment.push('V', 'V', 'V', 'V');
+    edges_foldAngle.push(180, 180, 180, 180);
 
-      // Mountain hinge wings
-      const perpX = (-dy / dist) * (flap.radius * 0.6);
-      const perpY = (dx / dist) * (flap.radius * 0.6);
-
-      const wingL = vertices_coords.length;
-      vertices_coords.push([flapRootX + perpX, flapRootY + perpY, 0]);
-      const wingR = vertices_coords.length;
-      vertices_coords.push([flapRootX - perpX, flapRootY - perpY, 0]);
-
-      // Add mountain creases radiating outward (forming the physical origami flap)
-      edges_vertices.push([rootIdx, wingL]);
-      edges_assignment.push('M');
-      edges_foldAngle.push(-180);
-
-      edges_vertices.push([rootIdx, wingR]);
-      edges_assignment.push('M');
-      edges_foldAngle.push(-180);
-
-      edges_vertices.push([wingL, 4]);
-      edges_assignment.push('F'); // Facet hinge
-      edges_foldAngle.push(0);
-
-      edges_vertices.push([wingR, 4]);
-      edges_assignment.push('F');
-      edges_foldAngle.push(0);
-    });
-
-    // 4. Connect main diagonal valley axes to center
-    edges_vertices.push([0, 4]);
-    edges_assignment.push('V');
-    edges_foldAngle.push(90);
-
-    edges_vertices.push([1, 4]);
-    edges_assignment.push('V');
-    edges_foldAngle.push(90);
-
-    edges_vertices.push([2, 4]);
-    edges_assignment.push('V');
-    edges_foldAngle.push(90);
-
-    edges_vertices.push([3, 4]);
-    edges_assignment.push('V');
-    edges_foldAngle.push(90);
-
-    // Return complete FOLD specification
     return {
       file_spec: 1.1,
       file_creator: 'OrigamiUniversalSolver',
