@@ -213,6 +213,68 @@ function initThreeView(globals) {
         modelWrapper.rotation.set(0,0,0);
     }
 
+    var ghostMesh = null;
+
+    function setGhostMesh(meshData) {
+        removeGhostMesh();
+        if (!meshData || !meshData.vertices || meshData.vertices.length === 0) return;
+
+        var geom = new THREE.BufferGeometry();
+        var positions = [];
+
+        if (meshData.faces && meshData.faces.length > 0) {
+            meshData.faces.forEach(function(f) {
+                if (f.length >= 3) {
+                    var v0 = meshData.vertices[f[0]];
+                    var v1 = meshData.vertices[f[1]];
+                    var v2 = meshData.vertices[f[2]];
+                    if (v0 && v1 && v2) {
+                        positions.push(v0.x, v0.y, v0.z);
+                        positions.push(v1.x, v1.y, v1.z);
+                        positions.push(v2.x, v2.y, v2.z);
+                    }
+                }
+            });
+        }
+
+        if (positions.length === 0) {
+            meshData.vertices.forEach(function(v) {
+                positions.push(v.x, v.y, v.z);
+            });
+        }
+
+        geom.addAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+        geom.computeVertexNormals();
+        geom.computeBoundingBox();
+        geom.computeBoundingSphere();
+        geom.center();
+
+        var ghostRadius = geom.boundingSphere ? geom.boundingSphere.radius : 1;
+        var targetScale = (globals.scale || 1) * (1.2 / Math.max(0.001, ghostRadius));
+        geom.scale(targetScale, targetScale, targetScale);
+
+        var ghostMat = new THREE.MeshStandardMaterial({
+            color: 0x38bdf8, // Cyan glow
+            transparent: true,
+            opacity: 0.35,
+            wireframe: true,
+            roughness: 0.3,
+            metalness: 0.1
+        });
+
+        ghostMesh = new THREE.Mesh(geom, ghostMat);
+        modelWrapper.add(ghostMesh);
+    }
+
+    function removeGhostMesh() {
+        if (ghostMesh) {
+            modelWrapper.remove(ghostMesh);
+            if (ghostMesh.geometry) ghostMesh.geometry.dispose();
+            if (ghostMesh.material) ghostMesh.material.dispose();
+            ghostMesh = null;
+        }
+    }
+
     function setBackgroundColor(color){
         if (color === undefined) color = globals.backgroundColor;
         scene.background.setStyle( "#" + color);
@@ -231,6 +293,9 @@ function initThreeView(globals) {
         camera: camera,//needed for user interaction
         renderer: renderer,//needed for VR
         modelWrapper:modelWrapper,
+
+        setGhostMesh: setGhostMesh,
+        removeGhostMesh: removeGhostMesh,
 
         // saveSVG: saveSVG,//svg screenshot
 
