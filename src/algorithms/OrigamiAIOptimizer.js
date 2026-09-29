@@ -27,41 +27,13 @@ export class OrigamiAIOptimizer {
   }
 
   initBaseGenome() {
-    const archetype = this.skeleton?.archetype || 'bird';
+    const exts = this.skeleton?.extremities || [];
+    const insetRatios = exts.map(e => 0.2 + (e.normalizedLength || 0.7) * 0.22);
 
-    if (archetype === 'bunny') {
-      this.baseGenome = {
-        archetype: 'bunny',
-        earDepth: 0.35,
-        snoutDepth: 0.22,
-        bodyInset: 0.30,
-        earFoldAngle: -180.0,
-        bodyValleyAngle: 180.0,
-        subdivisions: 0
-      };
-    } else if (archetype === 'quadruped') {
-      this.baseGenome = {
-        archetype: 'quadruped',
-        legInset: 0.32,
-        kneeAngle: -180.0,
-        spineAngle: -180.0,
-        subdivisions: 0
-      };
-    } else {
-      this.baseGenome = {
-        archetype: 'bird',
-        flapGenes: [
-          { insetRatio: 0.28 },
-          { insetRatio: 0.28 },
-          { insetRatio: 0.28 },
-          { insetRatio: 0.28 }
-        ],
-        diagonalValleyAngle: 90.0,
-        mountainFoldAngle: -180.0,
-        axialValleyAngle: 180.0,
-        subdivisions: 0
-      };
-    }
+    this.baseGenome = {
+      insetRatios: insetRatios.length > 0 ? insetRatios : [0.28, 0.28, 0.28, 0.28],
+      foldAngles: exts.map(() => -180.0)
+    };
 
     this.bestGenome = JSON.parse(JSON.stringify(this.baseGenome));
   }
@@ -71,23 +43,10 @@ export class OrigamiAIOptimizer {
    */
   synthesizeCandidate(genome) {
     const paperSize = 1000;
-    let foldData;
-
-    if (genome.archetype === 'bunny') {
-      foldData = OrigamiUniversalSolver.synthesizeBunnyBase(paperSize, {
-        earDepth: genome.earDepth,
-        snoutDepth: genome.snoutDepth,
-        bodyInset: genome.bodyInset
-      });
-    } else if (genome.archetype === 'quadruped') {
-      foldData = OrigamiUniversalSolver.synthesizeQuadrupedBase(paperSize, {
-        insetRatio: genome.legInset
-      });
-    } else {
-      foldData = OrigamiUniversalSolver.synthesizeBirdBase(paperSize, {
-        insetRatio: genome.flapGenes?.[0]?.insetRatio ?? 0.28
-      });
-    }
+    const foldData = OrigamiUniversalSolver.synthesizeFoldPattern(this.skeleton, {
+      paperSize,
+      insetRatios: genome.insetRatios
+    });
 
     const svgData = OrigamiUniversalSolver.foldToSVG(foldData);
     return { foldData, svgData };
@@ -99,33 +58,14 @@ export class OrigamiAIOptimizer {
   mutateGenome(parentGenome, rate = 0.25) {
     const child = JSON.parse(JSON.stringify(parentGenome));
 
-    if (child.archetype === 'bunny') {
-      if (Math.random() < rate) {
-        child.earDepth += (Math.random() - 0.5) * 0.08;
-        child.earDepth = Math.max(0.18, Math.min(0.48, child.earDepth));
-      }
-      if (Math.random() < rate) {
-        child.snoutDepth += (Math.random() - 0.5) * 0.06;
-        child.snoutDepth = Math.max(0.10, Math.min(0.38, child.snoutDepth));
-      }
-      if (Math.random() < rate) {
-        child.bodyInset += (Math.random() - 0.5) * 0.08;
-        child.bodyInset = Math.max(0.15, Math.min(0.45, child.bodyInset));
-      }
-    } else if (child.archetype === 'quadruped') {
-      if (Math.random() < rate) {
-        child.legInset += (Math.random() - 0.5) * 0.08;
-        child.legInset = Math.max(0.15, Math.min(0.45, child.legInset));
-      }
-    } else {
-      if (child.flapGenes) {
-        child.flapGenes.forEach(gene => {
-          if (Math.random() < rate) {
-            gene.insetRatio += (Math.random() - 0.5) * 0.08;
-            gene.insetRatio = Math.max(0.12, Math.min(0.42, gene.insetRatio));
-          }
-        });
-      }
+    if (Array.isArray(child.insetRatios)) {
+      child.insetRatios = child.insetRatios.map(r => {
+        if (Math.random() < rate) {
+          const delta = (Math.random() - 0.5) * 0.08;
+          return Math.max(0.10, Math.min(0.48, r + delta));
+        }
+        return r;
+      });
     }
 
     return child;
