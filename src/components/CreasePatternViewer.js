@@ -92,6 +92,15 @@ export class CreasePatternViewer {
       const elements = [];
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
+      const get2DPos = (v) => {
+        if (!v) return [0, 0];
+        // In FOLD format: 2D is [x, y], 3D is [x, y, z] or [x, 0, z] where z is 2D Y
+        if (v.length === 2) return [v[0], v[1]];
+        // If 3D coordinates, z is the 2D planar Y coordinate if y is 0
+        const y2D = Math.abs(v[1]) < 0.0001 && v[2] !== undefined ? v[2] : v[1];
+        return [v[0], y2D];
+      };
+
       const updateBounds = (x, y) => {
         if (x < minX) minX = x;
         if (y < minY) minY = y;
@@ -99,11 +108,14 @@ export class CreasePatternViewer {
         if (y > maxY) maxY = y;
       };
 
-      coords.forEach(v => updateBounds(v[0], v[1]));
+      coords.forEach(v => {
+        const [x, y] = get2DPos(v);
+        updateBounds(x, y);
+      });
 
       foldData.edges_vertices.forEach((edge, idx) => {
-        const v1 = coords[edge[0]];
-        const v2 = coords[edge[1]];
+        const v1 = get2DPos(coords[edge[0]]);
+        const v2 = get2DPos(coords[edge[1]]);
         const assign = foldData.edges_assignment[idx];
         const stroke = assign === 'M' ? 'mountain' : assign === 'V' ? 'valley' : assign === 'C' ? 'cut' : assign === 'F' ? 'facet' : 'border';
         elements.push({
