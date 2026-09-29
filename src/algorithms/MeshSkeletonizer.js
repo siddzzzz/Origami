@@ -110,30 +110,22 @@ export class MeshSkeletonizer {
       if (extremities.length >= 10) break;
     }
 
-    // 3. Archetype Classification
-    // Detect top dorsal features (ears / horns)
-    const topExtremities = extremities.filter(e => e.dir.y > 0.45);
-    const sideExtremities = extremities.filter(e => Math.abs(e.dir.x) > 0.45);
-    const bottomExtremities = extremities.filter(e => e.dir.y < -0.45);
-
-    let archetype = 'bird'; // Default standard bird/crane base
-
-    if (topExtremities.length >= 2 && spanY >= spanX * 0.8) {
-      // 2 tall protruding ears/horns on top -> Bunny / Rabbit archetype
-      archetype = 'bunny';
-    } else if (bottomExtremities.length >= 3 || (spanZ > spanX && spanZ > spanY)) {
-      // 4 legs or long spine -> Quadruped archetype
-      archetype = 'quadruped';
-    } else if (sideExtremities.length >= 2 && spanX > spanY) {
-      // Wide wings -> Bird / Winged archetype
-      archetype = 'bird';
-    }
+    // 3. Map extremities onto 2D perimeter angles and normalized flap radii
+    extremities.forEach((ext, i) => {
+      // Azimuth angle in 3D (XZ plane relative to principal body axis)
+      const azimuth = Math.atan2(ext.dir.x, ext.dir.z);
+      // Elevation angle (-PI/2 to +PI/2)
+      const elevation = Math.asin(Math.max(-1, Math.min(1, ext.dir.y)));
+      
+      ext.azimuth = azimuth;
+      ext.elevation = elevation;
+      ext.index = i;
+    });
 
     return {
       center,
       maxDist,
       extremities,
-      archetype,
       proportions: { spanX, spanY, spanZ },
       totalVertices: vertices.length
     };
