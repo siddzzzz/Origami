@@ -126,6 +126,16 @@ function loadModelInSim(model) {
         } else if (win.$ && model.simUrl) {
           win.$(`.demo[data-url='${model.simUrl}']`).click();
         }
+
+        // Direct simulator pattern endpoint sync: Ensure 2D Crease Viewer exactly reflects the simulator's internal foldData!
+        setTimeout(() => {
+          if (win && win.globals && win.globals.pattern) {
+            const activeSimFold = win.globals.pattern.getFoldData(true) || win.globals.pattern.getFoldData(false);
+            if (activeSimFold && activeSimFold.vertices_coords && activeSimFold.vertices_coords.length > 0) {
+              creaseViewer.setModel({ foldData: activeSimFold });
+            }
+          }
+        }, 120);
       } catch (e) {
         console.warn('Error loading model into origami simulator:', e);
       }
