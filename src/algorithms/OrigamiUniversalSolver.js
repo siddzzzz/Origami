@@ -8,191 +8,125 @@
 
 export class OrigamiUniversalSolver {
   /**
-   * Generates a complete FOLD specification tailored to the 3D mesh archetype:
-   * - 'bunny': Blintz/Diamond base with twin vertical ear flaps (+Y), compact snout, and body tuck
-   * - 'quadruped': 4-corner limb tucks + spine ridge
-   * - 'bird' / default: 4-way cardinal flap base (wings, head, tail)
+   * Universal Origami Crease Pattern Generator
+   * Maps 3D extremities directly into 2D circle-packing flap roots & flat-foldable closed-polygon hinges
    */
   static synthesizeFoldPattern(skeleton, options = {}) {
-    const { extremities, archetype } = skeleton;
+    const { extremities = [], proportions = {} } = skeleton;
     const paperSize = options.paperSize || 1000;
     const half = paperSize / 2;
 
-    if (archetype === 'bunny') {
-      return this.synthesizeBunnyBase(paperSize, options);
-    } else if (archetype === 'quadruped') {
-      return this.synthesizeQuadrupedBase(paperSize, options);
-    } else {
-      return this.synthesizeBirdBase(paperSize, options);
+    // Default corners and center
+    const vertices_coords = [
+      [-half, -half, 0], // 0: Bottom-Left
+      [half, -half, 0],  // 1: Bottom-Right
+      [half, half, 0],   // 2: Top-Right
+      [-half, half, 0],  // 3: Top-Left
+      [0, 0, 0]          // 4: Center
+    ];
+
+    // Closed boundary perimeter
+    const edges_vertices = [
+      [0, 1], [1, 2], [2, 3], [3, 0]
+    ];
+    const edges_assignment = ['B', 'B', 'B', 'B'];
+    const edges_foldAngle = [0, 0, 0, 0];
+
+    // Compute flap placements along the square boundary & interior
+    // Sort extremities by 2D perimeter azimuth angle
+    const sortedExts = [...extremities].sort((a, b) => (a.azimuth || 0) - (b.azimuth || 0));
+
+    if (sortedExts.length === 0) {
+      // Fallback 4 cardinal points if no extremities
+      for (let a = 0; a < 4; a++) {
+        sortedExts.push({
+          azimuth: (a * Math.PI) / 2 - Math.PI / 4,
+          normalizedLength: 0.8,
+          dir: { x: Math.cos((a * Math.PI) / 2), y: 0, z: Math.sin((a * Math.PI) / 2) }
+        });
+      }
     }
-  }
 
-  /**
-   * Dedicated Flat-Foldable Bunny/Rabbit Origami Base (Twin Dorsal Ears + Head + Body)
-   */
-  static synthesizeBunnyBase(paperSize, options = {}) {
-    const half = paperSize / 2;
-    const earDepth = (options.earDepth ?? 0.35) * paperSize;
-    const snoutDepth = (options.snoutDepth ?? 0.22) * paperSize;
-    const bodyInset = (options.bodyInset ?? 0.30) * paperSize;
+    const flapRootIndices = [];
+    const perimeterNodeIndices = [];
 
-    const vertices_coords = [
-      [-half, -half, 0], // 0: Bottom-Left (Body base)
-      [half, -half, 0],  // 1: Bottom-Right (Body base)
-      [half, half, 0],   // 2: Top-Right (Right Ear Tip)
-      [-half, half, 0],  // 3: Top-Left (Left Ear Tip)
-      [0, 0, 0],         // 4: Central Hinge
-      [0, -half, 0],     // 5: Bottom Mid
-      [half, 0, 0],      // 6: Right Mid
-      [0, half, 0],      // 7: Top Mid (Between Ears)
-      [-half, 0, 0],     // 8: Left Mid
-      [-earDepth, half - earDepth, 0], // 9: Left Ear Root
-      [earDepth, half - earDepth, 0],  // 10: Right Ear Root
-      [0, -bodyInset, 0],              // 11: Body Flap Root
-      [0, snoutDepth, 0]               // 12: Snout/Head Center
-    ];
+    sortedExts.forEach((ext, i) => {
+      const angle = ext.azimuth || 0;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+      const absCos = Math.abs(cosA);
+      const absSin = Math.abs(sinA);
 
-    const edges_vertices = [
-      // Outer boundaries
-      [0, 5], [5, 1], [1, 6], [6, 2], [2, 7], [7, 3], [3, 8], [8, 0]
-    ];
-    const edges_assignment = ['B', 'B', 'B', 'B', 'B', 'B', 'B', 'B'];
-    const edges_foldAngle = [0, 0, 0, 0, 0, 0, 0, 0];
+      // 1. Compute 2D boundary intersection
+      let bx = 0, by = 0;
+      if (absCos > absSin) {
+        bx = cosA > 0 ? half : -half;
+        by = bx * (sinA / cosA);
+      } else {
+        by = sinA > 0 ? half : -half;
+        bx = by * (cosA / sinA);
+      }
 
-    // Ear Mountain Split Hinges (forming distinct upright bunny ears)
-    edges_vertices.push([7, 12], [3, 9], [2, 10], [9, 12], [10, 12]);
-    edges_assignment.push('M', 'M', 'M', 'M', 'M');
-    edges_foldAngle.push(-180, -180, -180, -180, -180);
+      const pNodeIdx = vertices_coords.length;
+      vertices_coords.push([bx, by, 0]);
+      perimeterNodeIndices.push(pNodeIdx);
 
-    // Ear Valley Spreads
-    edges_vertices.push([8, 9], [6, 10], [9, 7], [10, 7]);
-    edges_assignment.push('V', 'V', 'V', 'V');
-    edges_foldAngle.push(180, 180, 90, 90);
+      // 2. Compute Inset Flap Root proportional to extremity length
+      const lengthFactor = Math.max(0.2, Math.min(1.0, ext.normalizedLength || 0.7));
+      const insetDepth = (options.insetRatios?.[i] ?? (0.2 + lengthFactor * 0.22)) * paperSize;
+      const rootX = (bx / half) * (half - insetDepth);
+      const rootY = (by / half) * (half - insetDepth);
 
-    // Body & Spine Base
-    edges_vertices.push([0, 11], [1, 11], [11, 5], [11, 4], [4, 12]);
-    edges_assignment.push('M', 'M', 'V', 'M', 'M');
-    edges_foldAngle.push(-180, -180, 180, -180, -180);
+      const fRootIdx = vertices_coords.length;
+      vertices_coords.push([rootX, rootY, 0]);
+      flapRootIndices.push(fRootIdx);
 
-    // Side Tucks
-    edges_vertices.push([0, 4], [1, 4], [8, 4], [6, 4]);
-    edges_assignment.push('V', 'V', 'V', 'V');
-    edges_foldAngle.push(90, 90, 90, 90);
+      // 3. Flap Spine & Axial Mountain/Valley Creases
+      // Center (4) -> Flap Root (M)
+      edges_vertices.push([4, fRootIdx]);
+      edges_assignment.push('M');
+      edges_foldAngle.push(-180);
 
-    return {
-      file_spec: 1.1,
-      file_creator: 'OrigamiUniversalSolver',
-      file_title: 'Bunny Rabbit Origami Base',
-      frame_classes: ['creasePattern'],
-      vertices_coords,
-      edges_vertices,
-      edges_assignment,
-      edges_foldAngle
-    };
-  }
+      // Flap Root -> Boundary Node (V)
+      edges_vertices.push([fRootIdx, pNodeIdx]);
+      edges_assignment.push('V');
+      edges_foldAngle.push(180);
+    });
 
-  /**
-   * Quadruped 4-Legged Animal Origami Base
-   */
-  static synthesizeQuadrupedBase(paperSize, options = {}) {
-    const half = paperSize / 2;
-    const q = (options.insetRatio ?? 0.32) * paperSize;
+    // 4. Inter-Flap Hinge Network & Corner Connections (Forming Closed Triangulated Polygons)
+    for (let i = 0; i < flapRootIndices.length; i++) {
+      const currRoot = flapRootIndices[i];
+      const nextRoot = flapRootIndices[(i + 1) % flapRootIndices.length];
+      const currPerim = perimeterNodeIndices[i];
+      const nextPerim = perimeterNodeIndices[(i + 1) % perimeterNodeIndices.length];
 
-    const vertices_coords = [
-      [-half, -half, 0], [half, -half, 0], [half, half, 0], [-half, half, 0], // 0..3: 4 feet
-      [0, 0, 0],                                                             // 4: Spine Center
-      [0, -half, 0], [half, 0, 0], [0, half, 0], [-half, 0, 0],              // 5..8: Midpoints
-      [-q, -q, 0], [q, -q, 0], [q, q, 0], [-q, q, 0]                         // 9..12: 4 Inset Knee Nodes
-    ];
+      // Flap Root to Next Flap Root (Valley Hinge)
+      edges_vertices.push([currRoot, nextRoot]);
+      edges_assignment.push('V');
+      edges_foldAngle.push(90);
 
-    const edges_vertices = [
-      [0, 5], [5, 1], [1, 6], [6, 2], [2, 7], [7, 3], [3, 8], [8, 0]
-    ];
-    const edges_assignment = ['B', 'B', 'B', 'B', 'B', 'B', 'B', 'B'];
-    const edges_foldAngle = [0, 0, 0, 0, 0, 0, 0, 0];
+      // Boundary segment connection
+      edges_vertices.push([currPerim, nextPerim]);
+      edges_assignment.push('B');
+      edges_foldAngle.push(0);
 
-    // Corner Leg Petal Mountains
-    edges_vertices.push(
-      [0, 9], [9, 5], [9, 8], [9, 4],
-      [1, 10], [10, 5], [10, 6], [10, 4],
-      [2, 11], [11, 6], [11, 7], [11, 4],
-      [3, 12], [12, 7], [12, 8], [12, 4]
-    );
-    edges_assignment.push(
-      'M', 'V', 'V', 'M',
-      'M', 'V', 'V', 'M',
-      'M', 'V', 'V', 'M',
-      'M', 'V', 'V', 'M'
-    );
-    edges_foldAngle.push(
-      -180, 180, 180, -180,
-      -180, 180, 180, -180,
-      -180, 180, 180, -180,
-      -180, 180, 180, -180
-    );
+      // Petal Mountain Creases from roots to boundary
+      edges_vertices.push([currRoot, nextPerim]);
+      edges_assignment.push('M');
+      edges_foldAngle.push(-180);
+    }
 
-    // Spine Axial Fold
-    edges_vertices.push([5, 4], [7, 4], [8, 4], [6, 4]);
-    edges_assignment.push('M', 'M', 'V', 'V');
-    edges_foldAngle.push(-180, -180, 180, 180);
+    // Connect the 4 corners to center for diagonal stiffness
+    for (let c = 0; c < 4; c++) {
+      edges_vertices.push([c, 4]);
+      edges_assignment.push('V');
+      edges_foldAngle.push(90);
+    }
 
     return {
       file_spec: 1.1,
       file_creator: 'OrigamiUniversalSolver',
-      file_title: 'Quadruped Animal Origami Base',
-      frame_classes: ['creasePattern'],
-      vertices_coords,
-      edges_vertices,
-      edges_assignment,
-      edges_foldAngle
-    };
-  }
-
-  /**
-   * Classical Bird / Crane Origami Base (Wings, Beak, Tail)
-   */
-  static synthesizeBirdBase(paperSize, options = {}) {
-    const half = paperSize / 2;
-    const q = (options.insetRatio ?? 0.28) * paperSize;
-
-    const vertices_coords = [
-      [-half, -half, 0], [half, -half, 0], [half, half, 0], [-half, half, 0],
-      [0, 0, 0],
-      [0, -half, 0], [half, 0, 0], [0, half, 0], [-half, 0, 0],
-      [0, -q, 0], [q, 0, 0], [0, q, 0], [-q, 0, 0]
-    ];
-
-    const edges_vertices = [
-      [0, 5], [5, 1], [1, 6], [6, 2], [2, 7], [7, 3], [3, 8], [8, 0]
-    ];
-    const edges_assignment = ['B', 'B', 'B', 'B', 'B', 'B', 'B', 'B'];
-    const edges_foldAngle = [0, 0, 0, 0, 0, 0, 0, 0];
-
-    edges_vertices.push([0, 4], [1, 4], [2, 4], [3, 4]);
-    edges_assignment.push('V', 'V', 'V', 'V');
-    edges_foldAngle.push(90, 90, 90, 90);
-
-    edges_vertices.push(
-      [0, 9], [1, 9],
-      [1, 10], [2, 10],
-      [2, 11], [3, 11],
-      [3, 12], [0, 12]
-    );
-    edges_assignment.push('M', 'M', 'M', 'M', 'M', 'M', 'M', 'M');
-    edges_foldAngle.push(-180, -180, -180, -180, -180, -180, -180, -180);
-
-    edges_vertices.push([4, 9], [4, 10], [4, 11], [4, 12]);
-    edges_assignment.push('M', 'M', 'M', 'M');
-    edges_foldAngle.push(-180, -180, -180, -180);
-
-    edges_vertices.push([9, 5], [10, 6], [11, 7], [12, 8]);
-    edges_assignment.push('V', 'V', 'V', 'V');
-    edges_foldAngle.push(180, 180, 180, 180);
-
-    return {
-      file_spec: 1.1,
-      file_creator: 'OrigamiUniversalSolver',
-      file_title: '3D Mesh Abstracted Origami',
+      file_title: `${skeleton.extremities?.length || 4}-Flap Synthesized Origami`,
       frame_classes: ['creasePattern'],
       vertices_coords,
       edges_vertices,
