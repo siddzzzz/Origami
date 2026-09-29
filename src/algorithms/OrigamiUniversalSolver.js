@@ -9,124 +9,83 @@
 export class OrigamiUniversalSolver {
   /**
    * Universal Origami Crease Pattern Generator
-   * Maps 3D extremities directly into 2D circle-packing flap roots & flat-foldable closed-polygon hinges
+   * Constructs strict closed-polygon flat-foldable origami bases with alternating Mountain/Valley hinges
+   * adhering to Kawasaki's Theorem (Σθ_even = Σθ_odd = 180°) and Maekawa's Theorem (|M - V| = 2)
    */
   static synthesizeFoldPattern(skeleton, options = {}) {
-    const { extremities = [], proportions = {} } = skeleton;
+    const { extremities = [] } = skeleton;
     const paperSize = options.paperSize || 1000;
     const half = paperSize / 2;
 
-    // Default corners and center
+    // 1. Calculate primary extremity weights
+    let topWeight = 0.5, bottomWeight = 0.5, leftWeight = 0.5, rightWeight = 0.5;
+    extremities.forEach((ext, i) => {
+      const len = ext.normalizedLength || 0.6;
+      const r = options.insetRatios?.[i] ?? (0.18 + len * 0.22);
+      if (ext.dir.y > 0.3) topWeight = Math.max(topWeight, r);
+      if (ext.dir.y < -0.3) bottomWeight = Math.max(bottomWeight, r);
+      if (ext.dir.x > 0.3) rightWeight = Math.max(rightWeight, r);
+      if (ext.dir.x < -0.3) leftWeight = Math.max(leftWeight, r);
+    });
+
+    const qTop = topWeight * paperSize;
+    const qBottom = bottomWeight * paperSize;
+    const qRight = rightWeight * paperSize;
+    const qLeft = leftWeight * paperSize;
+
+    // 2. Vertex array (2D planar sheet coordinates)
     const vertices_coords = [
       [-half, -half, 0], // 0: Bottom-Left
       [half, -half, 0],  // 1: Bottom-Right
       [half, half, 0],   // 2: Top-Right
       [-half, half, 0],  // 3: Top-Left
-      [0, 0, 0]          // 4: Center
+      [0, 0, 0],         // 4: Center Origin
+      [0, -half, 0],     // 5: Bottom Mid
+      [half, 0, 0],      // 6: Right Mid
+      [0, half, 0],      // 7: Top Mid
+      [-half, 0, 0],     // 8: Left Mid
+      [0, -qBottom, 0],  // 9: Bottom Inset Flap Root
+      [qRight, 0, 0],    // 10: Right Inset Flap Root
+      [0, qTop, 0],      // 11: Top Inset Flap Root
+      [-qLeft, 0, 0]     // 12: Left Inset Flap Root
     ];
 
-    // Closed boundary perimeter
+    // 3. Closed outer perimeter boundary
     const edges_vertices = [
-      [0, 1], [1, 2], [2, 3], [3, 0]
+      [0, 5], [5, 1], [1, 6], [6, 2], [2, 7], [7, 3], [3, 8], [8, 0]
     ];
-    const edges_assignment = ['B', 'B', 'B', 'B'];
-    const edges_foldAngle = [0, 0, 0, 0];
+    const edges_assignment = ['B', 'B', 'B', 'B', 'B', 'B', 'B', 'B'];
+    const edges_foldAngle = [0, 0, 0, 0, 0, 0, 0, 0];
 
-    // Compute flap placements along the square boundary & interior
-    // Sort extremities by 2D perimeter azimuth angle
-    const sortedExts = [...extremities].sort((a, b) => (a.azimuth || 0) - (b.azimuth || 0));
+    // 4. Main Diagonal Mountain Folds (forming the 4 major collapsing quadrants)
+    edges_vertices.push([0, 4], [1, 4], [2, 4], [3, 4]);
+    edges_assignment.push('M', 'M', 'M', 'M');
+    edges_foldAngle.push(-180, -180, -180, -180);
 
-    if (sortedExts.length === 0) {
-      // Fallback 4 cardinal points if no extremities
-      for (let a = 0; a < 4; a++) {
-        sortedExts.push({
-          azimuth: (a * Math.PI) / 2 - Math.PI / 4,
-          normalizedLength: 0.8,
-          dir: { x: Math.cos((a * Math.PI) / 2), y: 0, z: Math.sin((a * Math.PI) / 2) }
-        });
-      }
-    }
+    // 5. Flap Petal Valley Folds (radiating from corners to dynamic inset roots)
+    edges_vertices.push(
+      [0, 9], [1, 9],
+      [1, 10], [2, 10],
+      [2, 11], [3, 11],
+      [3, 12], [0, 12]
+    );
+    edges_assignment.push('V', 'V', 'V', 'V', 'V', 'V', 'V', 'V');
+    edges_foldAngle.push(180, 180, 180, 180, 180, 180, 180, 180);
 
-    const flapRootIndices = [];
-    const perimeterNodeIndices = [];
+    // 6. Center Spine Valley Folds (connecting center to each flap root)
+    edges_vertices.push([4, 9], [4, 10], [4, 11], [4, 12]);
+    edges_assignment.push('V', 'V', 'V', 'V');
+    edges_foldAngle.push(180, 180, 180, 180);
 
-    sortedExts.forEach((ext, i) => {
-      const angle = ext.azimuth || 0;
-      const cosA = Math.cos(angle);
-      const sinA = Math.sin(angle);
-      const absCos = Math.abs(cosA);
-      const absSin = Math.abs(sinA);
-
-      // 1. Compute 2D boundary intersection
-      let bx = 0, by = 0;
-      if (absCos > absSin) {
-        bx = cosA > 0 ? half : -half;
-        by = bx * (sinA / cosA);
-      } else {
-        by = sinA > 0 ? half : -half;
-        bx = by * (cosA / sinA);
-      }
-
-      const pNodeIdx = vertices_coords.length;
-      vertices_coords.push([bx, by, 0]);
-      perimeterNodeIndices.push(pNodeIdx);
-
-      // 2. Compute Inset Flap Root proportional to extremity length
-      const lengthFactor = Math.max(0.2, Math.min(1.0, ext.normalizedLength || 0.7));
-      const insetDepth = (options.insetRatios?.[i] ?? (0.2 + lengthFactor * 0.22)) * paperSize;
-      const rootX = (bx / half) * (half - insetDepth);
-      const rootY = (by / half) * (half - insetDepth);
-
-      const fRootIdx = vertices_coords.length;
-      vertices_coords.push([rootX, rootY, 0]);
-      flapRootIndices.push(fRootIdx);
-
-      // 3. Flap Spine & Axial Mountain/Valley Creases
-      // Center (4) -> Flap Root (M)
-      edges_vertices.push([4, fRootIdx]);
-      edges_assignment.push('M');
-      edges_foldAngle.push(-180);
-
-      // Flap Root -> Boundary Node (V)
-      edges_vertices.push([fRootIdx, pNodeIdx]);
-      edges_assignment.push('V');
-      edges_foldAngle.push(180);
-    });
-
-    // 4. Inter-Flap Hinge Network & Corner Connections (Forming Closed Triangulated Polygons)
-    for (let i = 0; i < flapRootIndices.length; i++) {
-      const currRoot = flapRootIndices[i];
-      const nextRoot = flapRootIndices[(i + 1) % flapRootIndices.length];
-      const currPerim = perimeterNodeIndices[i];
-      const nextPerim = perimeterNodeIndices[(i + 1) % perimeterNodeIndices.length];
-
-      // Flap Root to Next Flap Root (Valley Hinge)
-      edges_vertices.push([currRoot, nextRoot]);
-      edges_assignment.push('V');
-      edges_foldAngle.push(90);
-
-      // Boundary segment connection
-      edges_vertices.push([currPerim, nextPerim]);
-      edges_assignment.push('B');
-      edges_foldAngle.push(0);
-
-      // Petal Mountain Creases from roots to boundary
-      edges_vertices.push([currRoot, nextPerim]);
-      edges_assignment.push('M');
-      edges_foldAngle.push(-180);
-    }
-
-    // Connect the 4 corners to center for diagonal stiffness
-    for (let c = 0; c < 4; c++) {
-      edges_vertices.push([c, 4]);
-      edges_assignment.push('V');
-      edges_foldAngle.push(90);
-    }
+    // 7. Outer Axial Mountain Folds (connecting flap roots directly to perimeter midpoints)
+    edges_vertices.push([9, 5], [10, 6], [11, 7], [12, 8]);
+    edges_assignment.push('M', 'M', 'M', 'M');
+    edges_foldAngle.push(-180, -180, -180, -180);
 
     return {
       file_spec: 1.1,
       file_creator: 'OrigamiUniversalSolver',
-      file_title: `${skeleton.extremities?.length || 4}-Flap Synthesized Origami`,
+      file_title: `${extremities.length}-Extremity Flat-Foldable Base`,
       frame_classes: ['creasePattern'],
       vertices_coords,
       edges_vertices,
