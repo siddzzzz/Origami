@@ -37,6 +37,12 @@ const hudLoss = document.getElementById('hud-loss');
 const hudScore = document.getElementById('hud-score');
 const btnStepAi = document.getElementById('btn-step-ai');
 const btnRunAiLoop = document.getElementById('btn-run-ai-loop');
+const detailSelect = document.getElementById('detail-select');
+const minCreaseSlider = document.getElementById('min-crease-slider');
+const minCreaseLabel = document.getElementById('min-crease-label');
+
+let currentDetailLevel = 2; // Level 3: Micro-Sculpted by default
+let currentMinCreaseLength = 35; // 35mm physical limit by default
 
 // Target Mesh Inspector elements
 const targetMeshInspector = document.getElementById('target-mesh-inspector');
@@ -153,9 +159,15 @@ async function process3DMesh(objText, modelName = 'Synthesized 3D Model') {
     
     activeMeshTarget = meshData;
     activeSkeleton = skeleton;
-    activeOptimizer = new OrigamiAIOptimizer(skeleton, meshData.vertices);
+    activeOptimizer = new OrigamiAIOptimizer(skeleton, meshData.vertices, {
+      detailLevel: currentDetailLevel,
+      minCreaseLength: currentMinCreaseLength
+    });
 
-    const foldData = OrigamiUniversalSolver.synthesizeFoldPattern(skeleton);
+    const foldData = OrigamiUniversalSolver.synthesizeFoldPattern(skeleton, {
+      detailLevel: currentDetailLevel,
+      minCreaseLength: currentMinCreaseLength
+    });
     const svgData = OrigamiUniversalSolver.foldToSVG(foldData);
 
     // Initial loss evaluation
@@ -525,14 +537,63 @@ btnRunAiLoop.addEventListener('click', async () => {
   hudStatus.textContent = 'Finished';
 });
 
-// Top bar AI optimize shortcut
-btnOptimizeAi.addEventListener('click', () => {
-  if (!activeOptimizer) {
-    modalImport.classList.remove('hidden');
-    return;
-  }
-  btnRunAiLoop.click();
-});
+// Detail Level and Min Crease Limit UI listeners
+if (detailSelect) {
+  detailSelect.addEventListener('change', (e) => {
+    currentDetailLevel = parseInt(e.target.value, 10);
+    rebuildActiveModel();
+  });
+}
+
+if (minCreaseSlider) {
+  minCreaseSlider.addEventListener('input', (e) => {
+    currentMinCreaseLength = parseInt(e.target.value, 10);
+    if (minCreaseLabel) minCreaseLabel.textContent = `${currentMinCreaseLength}mm`;
+    rebuildActiveModel();
+  });
+}
+
+function rebuildActiveModel() {
+  if (!activeSkeleton || !activeMeshTarget) return;
+
+  const foldData = OrigamiUniversalSolver.synthesizeFoldPattern(activeSkeleton, {
+    detailLevel: currentDetailLevel,
+    minCreaseLength: currentMinCreaseLength,
+    insetRatios: activeOptimizer ? activeOptimizer.bestGenome?.insetRatios : undefined,
+    microOffsets: activeOptimizer ? activeOptimizer.bestGenome?.microOffsets : undefined
+  });
+  const svgData = OrigamiUniversalSolver.foldToSVG(foldData);
+
+  const initialPaperPoints = foldData.vertices_coords.map(v => ({ x: v[0], y: v[1], z: v[2] }));
+  const evalResult = OrigamiFitnessEvaluator.evaluateFitness(initialPaperPoints, activeMeshTarget.vertices);
+  if (hudLoss) hudLoss.textContent = evalResult.totalLoss.toFixed(3);
+  if (hudScore) hudScore.textContent = `${evalResult.scorePercent}%`;
+
+  const levelName = currentDetailLevel === 0 ? 'Macro' : currentDetailLevel === 1 ? 'Articulated' : 'Micro-Sculpted';
+  currentModel.foldData = foldData;
+  currentModel.svgData = svgData;
+  currentModel.steps = [
+    {
+      step: 1,
+      description: `${activeSkeleton.morphology.toUpperCase()} (${levelName}, Min ${currentMinCreaseLength}mm)`,
+      creases: foldData.edges_vertices.map((e, idx) => {
+        const v1 = foldData.vertices_coords[e[0]];
+        const v2 = foldData.vertices_coords[e[1]];
+        const assign = foldData.edges_assignment[idx];
+        return {
+          x1: v1[0],
+          y1: v1[1],
+          x2: v2[0],
+          y2: v2[1],
+          type: assign === 'M' ? 'mountain' : assign === 'V' ? 'valley' : 'facet'
+        };
+      })
+    }
+  ];
+
+  customModelsMap.set(currentModel.id, currentModel);
+  loadModelInSim(currentModel);
+}
 
 // Initial boot
 loadModelInSim(CLEAN_ORIGAMI_MODELS[0]);

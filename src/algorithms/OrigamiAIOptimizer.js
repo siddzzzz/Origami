@@ -13,8 +13,9 @@ export class OrigamiAIOptimizer {
   constructor(skeleton, targetVertices, options = {}) {
     this.skeleton = skeleton;
     this.targetVertices = targetVertices;
+    this.options = options;
     this.populationSize = options.populationSize || 8;
-    this.mutationRate = options.mutationRate || 0.20;
+    this.mutationRate = options.mutationRate || 0.22;
     this.currentGeneration = 0;
     this.bestGenome = null;
     this.bestLoss = Infinity;
@@ -29,10 +30,13 @@ export class OrigamiAIOptimizer {
   initBaseGenome() {
     const exts = this.skeleton?.extremities || [];
     const insetRatios = exts.map(e => 0.2 + (e.normalizedLength || 0.7) * 0.22);
+    const microOffsets = [1.0, 1.0, 1.0, 1.0];
 
     this.baseGenome = {
       insetRatios: insetRatios.length > 0 ? insetRatios : [0.28, 0.28, 0.28, 0.28],
-      foldAngles: exts.map(() => -180.0)
+      microOffsets,
+      detailLevel: this.options.detailLevel ?? 2,
+      minCreaseLength: this.options.minCreaseLength ?? 35
     };
 
     this.bestGenome = JSON.parse(JSON.stringify(this.baseGenome));
@@ -45,7 +49,10 @@ export class OrigamiAIOptimizer {
     const paperSize = 1000;
     const foldData = OrigamiUniversalSolver.synthesizeFoldPattern(this.skeleton, {
       paperSize,
-      insetRatios: genome.insetRatios
+      insetRatios: genome.insetRatios,
+      microOffsets: genome.microOffsets,
+      detailLevel: genome.detailLevel ?? (this.options.detailLevel ?? 2),
+      minCreaseLength: genome.minCreaseLength ?? (this.options.minCreaseLength ?? 35)
     });
 
     const svgData = OrigamiUniversalSolver.foldToSVG(foldData);
@@ -53,18 +60,30 @@ export class OrigamiAIOptimizer {
   }
 
   /**
-   * Generates a mutated genome from an existing genome
+   * Generates a mutated genome from an existing genome (evolving macro and micro folds)
    */
   mutateGenome(parentGenome, rate = 0.25) {
     const child = JSON.parse(JSON.stringify(parentGenome));
 
+    // Mutate macro flap ratios
     if (Array.isArray(child.insetRatios)) {
       child.insetRatios = child.insetRatios.map(r => {
         if (Math.random() < rate) {
           const delta = (Math.random() - 0.5) * 0.08;
-          return Math.max(0.10, Math.min(0.48, r + delta));
+          return Math.max(0.12, Math.min(0.48, r + delta));
         }
         return r;
+      });
+    }
+
+    // Mutate micro-fold sculpting offsets
+    if (Array.isArray(child.microOffsets)) {
+      child.microOffsets = child.microOffsets.map(o => {
+        if (Math.random() < rate) {
+          const delta = (Math.random() - 0.5) * 0.12;
+          return Math.max(0.6, Math.min(1.5, o + delta));
+        }
+        return o;
       });
     }
 
