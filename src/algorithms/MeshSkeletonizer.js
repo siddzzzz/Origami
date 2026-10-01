@@ -4,6 +4,7 @@
  * 1. Geometric bounding box and center of mass
  * 2. Extremity vertices / branch terminals (tips of wings, legs, head, tail)
  * 3. Topological stick tree skeleton (branch lengths and angles relative to center)
+ * 4. Morphological classification across 8 structural origami base families
  */
 
 export class MeshSkeletonizer {
@@ -30,11 +31,7 @@ export class MeshSkeletonizer {
   }
 
   /**
-   * Analyzes the 3D mesh and classifies its morphological archetype:
-   * - 'bunny' / 'upright_ears': Two tall dorsal ears (+Y), front head, squat base
-   * - 'bird' / 'winged': Dominant lateral wings (+X, -X), head/beak (+Z), tail (-Z)
-   * - 'quadruped': 4 ground limbs (-Y), elongated body spine (±Z), neck/head (+Y,+Z)
-   * - 'star' / 'radial': Radial symmetric lobes
+   * Analyzes the 3D mesh and extracts its stick skeleton tree & morphological base:
    */
   static extractSkeleton(meshData) {
     const { vertices } = meshData;
@@ -65,7 +62,6 @@ export class MeshSkeletonizer {
     const spanZ = maxZ - minZ || 1;
 
     // 2. Identify major extremities relative to bounding span
-    // Compute distance and directional prominence of each vertex
     const extremities = [];
     const distances = vertices.map((v, index) => {
       const dx = v.x - center.x;
@@ -77,10 +73,10 @@ export class MeshSkeletonizer {
     distances.sort((a, b) => b.dist - a.dist);
 
     const maxDist = distances[0]?.dist || 1;
-    const minClusterAngle = 0.38; // ~22 degrees angular separation
+    const minClusterAngle = 0.35; // ~20 degrees angular separation
 
     for (const item of distances) {
-      if (item.dist < maxDist * 0.3) continue;
+      if (item.dist < maxDist * 0.25) continue;
 
       const dir = {
         x: item.dx / item.dist,
@@ -107,16 +103,13 @@ export class MeshSkeletonizer {
         });
       }
 
-      if (extremities.length >= 10) break;
+      if (extremities.length >= 12) break;
     }
 
     // 3. Map extremities onto 2D perimeter angles and normalized flap radii
     extremities.forEach((ext, i) => {
-      // Azimuth angle in 3D (XZ plane relative to principal body axis)
       const azimuth = Math.atan2(ext.dir.x, ext.dir.z);
-      // Elevation angle (-PI/2 to +PI/2)
       const elevation = Math.asin(Math.max(-1, Math.min(1, ext.dir.y)));
-      
       ext.azimuth = azimuth;
       ext.elevation = elevation;
       ext.index = i;
@@ -127,6 +120,7 @@ export class MeshSkeletonizer {
       maxDist,
       extremities,
       proportions: { spanX, spanY, spanZ },
+      bounds: { minX, maxX, minY, maxY, minZ, maxZ },
       totalVertices: vertices.length
     };
     skeleton.morphology = MeshSkeletonizer.detectMorphology(meshData, skeleton);
@@ -134,45 +128,66 @@ export class MeshSkeletonizer {
   }
 
   /**
-   * Identifies 3D morphological class for origami base synthesis:
-   * - 'bunny': Two high dorsal ears (+Y) with compact crouching body
-   * - 'quadruped': 4 ground limbs (-Y) spanning 4 quadrants + head + tail
-   * - 'bird': Broad lateral wings (+X, -X) with beak and tail
-   * - 'pyramid': Concentrated central apex with radial polygonal base
-   * - 'universal': General arbitrary 3D extremity tree
+   * Identifies 3D morphological class across the 8 structural origami base families:
+   * - 'box_pleat': Prismatic, cubical, or architectural box forms
+   * - 'miura_corrugation': Cylindrical, conical, or rotational vases/shells
+   * - 'fish': Streamlined, aquatic, aerodynamic (Z-elongated with snout + tail)
+   * - 'frog': 8-flap multilimbed amphibians, frogs, spiders, quadrupeds
+   * - 'bird': Broad lateral wings (±X) with head & tail
+   * - 'bunny': Upright dorsal ear spikes (+Y) with compact crouching body
+   * - 'pyramid': Single elevated apex with radial polygon base
+   * - 'treemaker': General arbitrary branching stick tree
    */
   static detectMorphology(meshData, skeleton) {
-    const { extremities = [], proportions = {} } = skeleton;
+    const { extremities = [], proportions = {}, bounds = {} } = skeleton;
     const { spanX = 1, spanY = 1, spanZ = 1 } = proportions;
+    const { vertices = [] } = meshData;
 
-    // Check for 4 ground legs across quadrants (Quadruped / Frog)
-    const groundLegs = extremities.filter(e => e.dir.y < -0.4);
-    const hasFrontLegs = groundLegs.some(e => e.dir.z > 0.05);
-    const hasRearLegs = groundLegs.some(e => e.dir.z < -0.05);
-    const hasRightLegs = groundLegs.some(e => e.dir.x > 0.05);
-    const hasLeftLegs = groundLegs.some(e => e.dir.x < -0.05);
-    if (groundLegs.length >= 4 && hasFrontLegs && hasRearLegs && hasRightLegs && hasLeftLegs) {
-      return 'quadruped';
+    // 1. Check for Box-Pleating: Cubical / Boxy / Low vertex counts with 90° planar bounds
+    const isCubic = Math.abs(spanX - spanY) / spanX < 0.25 && Math.abs(spanY - spanZ) / spanY < 0.25;
+    if (vertices.length <= 16 && isCubic) {
+      return 'box_pleat';
     }
 
-    // Check for Star / Pyramid: dominant top apex with radial base
-    const apex = extremities.filter(e => e.dir.y > 0.6);
-    if (extremities.length <= 6 && apex.length === 1 && Math.abs(spanX - spanZ) / Math.max(spanX, spanZ) < 0.35) {
+    // 2. Check for Miura-Ori Corrugation: Cylindrical / Vase shells (high Y elongation with circular XZ cross section)
+    const isCylinder = spanY > spanX * 1.1 && Math.abs(spanX - spanZ) / Math.max(spanX, spanZ) < 0.28;
+    if (isCylinder && extremities.length >= 6) {
+      return 'miura_corrugation';
+    }
+
+    // 3. Check for Fish / Kite Base: Streamlined, elongated along Z with anterior snout and posterior tail
+    const isStreamlined = spanZ > spanX * 1.25 && spanZ > spanY * 1.1;
+    const hasFrontSnout = extremities.some(e => e.dir.z > 0.75);
+    const hasRearTail = extremities.some(e => e.dir.z < -0.75);
+    if (isStreamlined && hasFrontSnout && hasRearTail) {
+      return 'fish';
+    }
+
+    // 4. Check for Star / Pyramid: Dominant top apex (+Y > 0.7) with radial symmetric base
+    const topApexes = extremities.filter(e => e.dir.y > 0.7);
+    if (topApexes.length === 1 && extremities.length <= 6 && Math.abs(spanX - spanZ) / Math.max(spanX, spanZ) < 0.35) {
       return 'pyramid';
     }
 
-    // Check for Bunny: Two tall dorsal ears (Y > 0.8)
-    const tallEars = extremities.filter(e => e.dir.y > 0.8);
-    if (tallEars.length >= 2 || (extremities.some(e => e.dir.y > 0.9) && spanY > spanX * 0.7)) {
+    // 5. Check for Bunny: Two tall dorsal ears (+Y > 0.75) with compact body
+    const tallEars = extremities.filter(e => e.dir.y > 0.75);
+    if (tallEars.length >= 2 || (extremities.some(e => e.dir.y > 0.85) && spanY > spanX * 0.70)) {
       return 'bunny';
     }
 
-    // Check for Bird: Dominant lateral span or wings
-    const wings = extremities.filter(e => Math.abs(e.dir.x) > 0.65);
-    if (wings.length >= 2 || (spanX > spanY * 1.4 && spanX > spanZ * 1.15)) {
+    // 6. Check for Frog / Multilimbed (>= 3 ground limbs or multi-limb extremities)
+    const groundLegs = extremities.filter(e => e.dir.y < -0.30);
+    if (groundLegs.length >= 3 || extremities.length >= 6) {
+      return 'frog';
+    }
+
+    // 7. Check for Bird: Dominant lateral span / wings (±X > 0.6)
+    const wings = extremities.filter(e => Math.abs(e.dir.x) > 0.6);
+    if (wings.length >= 2 || (spanX > spanY * 1.3 && spanX > spanZ * 1.1)) {
       return 'bird';
     }
 
-    return 'universal';
+    // 8. General TreeMaker Medial-Axis Base for arbitrary 3D trees
+    return 'treemaker';
   }
 }

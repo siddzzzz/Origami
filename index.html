@@ -29,12 +29,13 @@
           <div class="model-selector-wrapper">
             <span>Model:</span>
             <select id="model-select" class="app-select">
-              <option value="crane-3d" selected>Traditional Crane (Tsuru)</option>
-              <option value="flapping-bird">Flapping Bird (Moving Wings)</option>
-              <option value="waterbomb-base">Waterbomb Base</option>
-              <option value="paper-airplane">Paper Airplane</option>
-              <option value="russian-triangle">Russian Triangle</option>
-              <option value="hypar-twisted">Hyperbolic Paraboloid (Hypar)</option>
+              <option value="crane-3d" selected>🦅 Traditional Crane (Bird Base)</option>
+              <option value="box-pleat">📦 Box-Pleated 8x8 Grid Base</option>
+              <option value="miura-ori">🌊 Miura-Ori Tessellation</option>
+              <option value="fish-base">🐟 Fish / Kite Base (22.5°)</option>
+              <option value="frog-base">🐸 Frog 8-Flap Multi-Limb Base</option>
+              <option value="bunny-base">🐰 Stanford Bunny Base</option>
+              <option value="pyramid-base">⭐ Star Pyramid Base</option>
             </select>
           </div>
 
@@ -71,7 +72,21 @@
           <span>Chamfer Loss: <b id="hud-loss" style="color: #f8fafc;">0.000</b></span>
           <span>3D Fit Score: <b id="hud-score" style="color: #34d399;">0%</b></span>
         </div>
-        <div style="display: flex; gap: 14px; align-items: center;">
+        <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label for="morphology-select" style="color: #38bdf8; font-weight: 600;">Base Family:</label>
+            <select id="morphology-select" class="app-select" style="padding: 3px 8px; font-size: 11px; height: 26px; border-color: #38bdf8; color: #38bdf8;">
+              <option value="auto" selected>🤖 Auto-Detect (3D Hull)</option>
+              <option value="treemaker">🌲 TreeMaker Medial-Axis</option>
+              <option value="box_pleat">📦 Box-Pleating Grid</option>
+              <option value="miura_corrugation">🌊 Miura-Ori Tessellation</option>
+              <option value="fish">🐟 Fish / Kite Base</option>
+              <option value="frog">🐸 Frog 8-Flap Base</option>
+              <option value="bird">🦅 Bird / Crane Base</option>
+              <option value="bunny">🐰 Bunny Base</option>
+              <option value="pyramid">⭐ Star Pyramid</option>
+            </select>
+          </div>
           <div style="display: flex; align-items: center; gap: 6px;">
             <label for="detail-select" style="color: #94a3b8;">Folds:</label>
             <select id="detail-select" class="app-select" style="padding: 3px 8px; font-size: 11px; height: 26px;">
@@ -219,20 +234,32 @@
           <div style="margin: 14px 0 8px 0; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">
             Or Load Sample 3D Test Models:
           </div>
-          <div style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
-            <button class="tool-btn btn-preset-model" data-obj="/test_models/bird_lowpoly.obj" style="flex: 1; justify-content: center; padding: 8px 12px;">
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px;">
+            <button class="tool-btn btn-preset-model" data-obj="/test_models/bird_lowpoly.obj" style="justify-content: center; padding: 8px 10px;">
               🦅 Bird Mesh
             </button>
-            <button class="tool-btn btn-preset-model" data-obj="/test_models/quadruped_lowpoly.obj" style="flex: 1; justify-content: center; padding: 8px 12px;">
+            <button class="tool-btn btn-preset-model" data-obj="/test_models/fish_lowpoly.obj" style="justify-content: center; padding: 8px 10px;">
+              🐟 Fish Mesh
+            </button>
+            <button class="tool-btn btn-preset-model" data-obj="/test_models/box_cube.obj" style="justify-content: center; padding: 8px 10px;">
+              📦 Box-Pleat Cube
+            </button>
+            <button class="tool-btn btn-preset-model" data-obj="/test_models/cylinder_vase.obj" style="justify-content: center; padding: 8px 10px;">
+              🌊 Miura Vase
+            </button>
+            <button class="tool-btn btn-preset-model" data-obj="/test_models/frog_lowpoly.obj" style="justify-content: center; padding: 8px 10px;">
+              🐸 Frog 8-Flap
+            </button>
+            <button class="tool-btn btn-preset-model" data-obj="/test_models/quadruped_lowpoly.obj" style="justify-content: center; padding: 8px 10px;">
               🐕 Quadruped
             </button>
-            <button class="tool-btn btn-preset-model" data-obj="/test_models/bunny.obj" style="flex: 1; justify-content: center; padding: 8px 12px;">
+            <button class="tool-btn btn-preset-model" data-obj="/test_models/bunny.obj" style="justify-content: center; padding: 8px 10px;">
               🐰 Stanford Bunny
             </button>
-            <button class="tool-btn btn-preset-model" data-obj="/test_models/spot_cow.obj" style="flex: 1; justify-content: center; padding: 8px 12px;">
-              🐄 Spot the Cow
+            <button class="tool-btn btn-preset-model" data-obj="/test_models/spot_cow.obj" style="justify-content: center; padding: 8px 10px;">
+              🐄 Spot Cow
             </button>
-            <button class="tool-btn btn-preset-model" data-obj="/test_models/star_pyramid.obj" style="flex: 1; justify-content: center; padding: 8px 12px;">
+            <button class="tool-btn btn-preset-model" data-obj="/test_models/star_pyramid.obj" style="justify-content: center; padding: 8px 10px;">
               ⭐ Star Pyramid
             </button>
           </div>

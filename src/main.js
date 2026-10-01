@@ -40,9 +40,11 @@ const btnRunAiLoop = document.getElementById('btn-run-ai-loop');
 const detailSelect = document.getElementById('detail-select');
 const minCreaseSlider = document.getElementById('min-crease-slider');
 const minCreaseLabel = document.getElementById('min-crease-label');
+const morphologySelect = document.getElementById('morphology-select');
 
 let currentDetailLevel = 2; // Level 3: Micro-Sculpted by default
 let currentMinCreaseLength = 35; // 35mm physical limit by default
+let currentMorphology = 'auto'; // Auto-detect by default
 
 // Target Mesh Inspector elements
 const targetMeshInspector = document.getElementById('target-mesh-inspector');
@@ -159,12 +161,22 @@ async function process3DMesh(objText, modelName = 'Synthesized 3D Model') {
     
     activeMeshTarget = meshData;
     activeSkeleton = skeleton;
+
+    const baseMorphology = currentMorphology !== 'auto' ? currentMorphology : skeleton.morphology;
+    if (morphologySelect) {
+      if (currentMorphology === 'auto') {
+        morphologySelect.options[0].textContent = `🤖 Auto: ${skeleton.morphology.toUpperCase()}`;
+      }
+    }
+
     activeOptimizer = new OrigamiAIOptimizer(skeleton, meshData.vertices, {
+      morphologyOverride: baseMorphology,
       detailLevel: currentDetailLevel,
       minCreaseLength: currentMinCreaseLength
     });
 
     const foldData = OrigamiUniversalSolver.synthesizeFoldPattern(skeleton, {
+      morphologyOverride: baseMorphology,
       detailLevel: currentDetailLevel,
       minCreaseLength: currentMinCreaseLength
     });
@@ -176,7 +188,7 @@ async function process3DMesh(objText, modelName = 'Synthesized 3D Model') {
 
     // Update AI HUD
     aiHud.classList.remove('hidden');
-    hudStatus.textContent = 'Initialized';
+    hudStatus.textContent = `Solved (${baseMorphology.toUpperCase()})`;
     hudGen.textContent = '0';
     hudLoss.textContent = initialEval.totalLoss.toFixed(3);
     hudScore.textContent = `${initialEval.scorePercent}%`;
@@ -184,15 +196,15 @@ async function process3DMesh(objText, modelName = 'Synthesized 3D Model') {
     // Build model structure for CreasePatternViewer
     const customModel = {
       id: `mesh-${Date.now()}`,
-      name: `${modelName} (${skeleton.morphology.toUpperCase()})`,
+      name: `${modelName} (${baseMorphology.toUpperCase()})`,
       paperSize: 1000,
       foldData,
       svgData,
-      morphology: skeleton.morphology,
+      morphology: baseMorphology,
       steps: [
         {
           step: 1,
-          description: `${skeleton.morphology.toUpperCase()} origami base synthesized (${foldData.faces_vertices ? foldData.faces_vertices.length : 0} faces)`,
+          description: `${baseMorphology.toUpperCase()} origami base synthesized (${foldData.faces_vertices ? foldData.faces_vertices.length : 0} faces)`,
           creases: foldData.edges_vertices.map((e, idx) => {
             const v1 = foldData.vertices_coords[e[0]];
             const v2 = foldData.vertices_coords[e[1]];
@@ -553,10 +565,28 @@ if (minCreaseSlider) {
   });
 }
 
+if (morphologySelect) {
+  morphologySelect.addEventListener('change', (e) => {
+    currentMorphology = e.target.value;
+    if (activeSkeleton && activeMeshTarget) {
+      const baseMorphology = currentMorphology !== 'auto' ? currentMorphology : activeSkeleton.morphology;
+      activeOptimizer = new OrigamiAIOptimizer(activeSkeleton, activeMeshTarget.vertices, {
+        morphologyOverride: baseMorphology,
+        detailLevel: currentDetailLevel,
+        minCreaseLength: currentMinCreaseLength
+      });
+      rebuildActiveModel();
+    }
+  });
+}
+
 function rebuildActiveModel() {
   if (!activeSkeleton || !activeMeshTarget) return;
 
+  const baseMorphology = currentMorphology !== 'auto' ? currentMorphology : activeSkeleton.morphology;
+
   const foldData = OrigamiUniversalSolver.synthesizeFoldPattern(activeSkeleton, {
+    morphologyOverride: baseMorphology,
     detailLevel: currentDetailLevel,
     minCreaseLength: currentMinCreaseLength,
     insetRatios: activeOptimizer ? activeOptimizer.bestGenome?.insetRatios : undefined,
@@ -568,6 +598,7 @@ function rebuildActiveModel() {
   const evalResult = OrigamiFitnessEvaluator.evaluateFitness(initialPaperPoints, activeMeshTarget.vertices);
   if (hudLoss) hudLoss.textContent = evalResult.totalLoss.toFixed(3);
   if (hudScore) hudScore.textContent = `${evalResult.scorePercent}%`;
+  if (hudStatus) hudStatus.textContent = `Active (${baseMorphology.toUpperCase()})`;
 
   const levelName = currentDetailLevel === 0 ? 'Macro' : currentDetailLevel === 1 ? 'Articulated' : 'Micro-Sculpted';
   currentModel.foldData = foldData;
@@ -575,7 +606,7 @@ function rebuildActiveModel() {
   currentModel.steps = [
     {
       step: 1,
-      description: `${activeSkeleton.morphology.toUpperCase()} (${levelName}, Min ${currentMinCreaseLength}mm)`,
+      description: `${baseMorphology.toUpperCase()} (${levelName}, Min ${currentMinCreaseLength}mm)`,
       creases: foldData.edges_vertices.map((e, idx) => {
         const v1 = foldData.vertices_coords[e[0]];
         const v2 = foldData.vertices_coords[e[1]];

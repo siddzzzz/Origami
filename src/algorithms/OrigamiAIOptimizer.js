@@ -49,6 +49,7 @@ export class OrigamiAIOptimizer {
     const paperSize = 1000;
     const foldData = OrigamiUniversalSolver.synthesizeFoldPattern(this.skeleton, {
       paperSize,
+      morphologyOverride: this.options.morphologyOverride,
       insetRatios: genome.insetRatios,
       microOffsets: genome.microOffsets,
       detailLevel: genome.detailLevel ?? (this.options.detailLevel ?? 2),
