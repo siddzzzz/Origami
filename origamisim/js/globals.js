@@ -108,6 +108,7 @@ function initGlobals(){
 
     function setCreasePercent(percent){
         _globals.creasePercent = percent;
+        _globals.shouldChangeCreasePercent = true;
         percent *= 100;
         $("#creasePercent>div").slider({value:percent});
         $("#creasePercent>input").val(percent.toFixed(0));

@@ -537,4 +537,11 @@ btnOptimizeAi.addEventListener('click', () => {
 // Initial boot
 loadModelInSim(CLEAN_ORIGAMI_MODELS[0]);
 
+// Global debug and test bindings
+window.setSimFoldPercent = setSimFoldPercent;
+window.loadModelInSim = loadModelInSim;
+window.process3DMesh = process3DMesh;
+window.getCurrentModel = () => currentModel;
+
+
 
