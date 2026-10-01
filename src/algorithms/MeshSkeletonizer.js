@@ -122,12 +122,57 @@ export class MeshSkeletonizer {
       ext.index = i;
     });
 
-    return {
+    const skeleton = {
       center,
       maxDist,
       extremities,
       proportions: { spanX, spanY, spanZ },
       totalVertices: vertices.length
     };
+    skeleton.morphology = MeshSkeletonizer.detectMorphology(meshData, skeleton);
+    return skeleton;
+  }
+
+  /**
+   * Identifies 3D morphological class for origami base synthesis:
+   * - 'bunny': Two high dorsal ears (+Y) with compact crouching body
+   * - 'quadruped': 4 ground limbs (-Y) spanning 4 quadrants + head + tail
+   * - 'bird': Broad lateral wings (+X, -X) with beak and tail
+   * - 'pyramid': Concentrated central apex with radial polygonal base
+   * - 'universal': General arbitrary 3D extremity tree
+   */
+  static detectMorphology(meshData, skeleton) {
+    const { extremities = [], proportions = {} } = skeleton;
+    const { spanX = 1, spanY = 1, spanZ = 1 } = proportions;
+
+    // Check for 4 ground legs across quadrants (Quadruped / Frog)
+    const groundLegs = extremities.filter(e => e.dir.y < -0.4);
+    const hasFrontLegs = groundLegs.some(e => e.dir.z > 0.05);
+    const hasRearLegs = groundLegs.some(e => e.dir.z < -0.05);
+    const hasRightLegs = groundLegs.some(e => e.dir.x > 0.05);
+    const hasLeftLegs = groundLegs.some(e => e.dir.x < -0.05);
+    if (groundLegs.length >= 4 && hasFrontLegs && hasRearLegs && hasRightLegs && hasLeftLegs) {
+      return 'quadruped';
+    }
+
+    // Check for Star / Pyramid: dominant top apex with radial base
+    const apex = extremities.filter(e => e.dir.y > 0.6);
+    if (extremities.length <= 6 && apex.length === 1 && Math.abs(spanX - spanZ) / Math.max(spanX, spanZ) < 0.35) {
+      return 'pyramid';
+    }
+
+    // Check for Bunny: Two tall dorsal ears (Y > 0.8)
+    const tallEars = extremities.filter(e => e.dir.y > 0.8);
+    if (tallEars.length >= 2 || (extremities.some(e => e.dir.y > 0.9) && spanY > spanX * 0.7)) {
+      return 'bunny';
+    }
+
+    // Check for Bird: Dominant lateral span or wings
+    const wings = extremities.filter(e => Math.abs(e.dir.x) > 0.65);
+    if (wings.length >= 2 || (spanX > spanY * 1.4 && spanX > spanZ * 1.15)) {
+      return 'bird';
+    }
+
+    return 'universal';
   }
 }
