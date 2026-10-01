@@ -364,11 +364,89 @@ function initPattern(globals){
         }
     }
 
+    function processParsedSvg(svg){
+        var _$svg = $(svg);
+        if (_$svg.find('parsererror').length) {
+            globals.warn("Error parsing SVG: " + (svg.innerText || "parsererror"));
+            return console.warn(_$svg.find('parsererror')[0]);
+        }
+
+        // Add SVG to page dom to reveal rendered styles (including CSS).
+        $(svg).appendTo('body');
+
+        clearAll();
+
+        //format all appropriate svg elements
+        _$svg.find("symbol").remove();
+        _$svg.find("defs > :not(style)").remove();
+        var $paths = _$svg.find("path");
+        var $lines = _$svg.find("line");
+        var $rects = _$svg.find("rect");
+        var $polygons = _$svg.find("polygon");
+        var $polylines = _$svg.find("polyline");
+        $paths.css({fill:"none", 'stroke-dasharray':"none"});
+        $lines.css({fill:"none", 'stroke-dasharray':"none"});
+        $rects.css({fill:"none", 'stroke-dasharray':"none"});
+        $polygons.css({fill:"none", 'stroke-dasharray':"none"});
+        $polylines.css({fill:"none", 'stroke-dasharray':"none"});
+
+        findType(verticesRaw, bordersRaw, borderFilter, $paths, $lines, $rects, $polygons, $polylines);
+        findType(verticesRaw, mountainsRaw, mountainFilter, $paths, $lines, $rects, $polygons, $polylines);
+        findType(verticesRaw, valleysRaw, valleyFilter, $paths, $lines, $rects, $polygons, $polylines);
+        findType(verticesRaw, cutsRaw, cutFilter, $paths, $lines, $rects, $polygons, $polylines);
+        findType(verticesRaw, triangulationsRaw, triangulationFilter, $paths, $lines, $rects, $polygons, $polylines);
+        findType(verticesRaw, hingesRaw, hingeFilter, $paths, $lines, $rects, $polygons, $polylines);
+
+        if (badColors.length>0){
+            badColors = _.uniq(badColors);
+            var string = "Some objects found with the following stroke colors:<br/><br/>";
+            _.each(badColors, function(color){
+                string += "<span style='background:" + color + "' class='colorSwatch'></span>" + color + "<br/>";
+            });
+            string +=  "<br/>These objects were ignored.<br/>  Please check that your file is set up correctly, <br/>" +
+                "see <b>File > Design Tips</b> for more information.";
+            globals.warn(string);
+        }
+
+        // Now that loading is done, remove SVG from page DOM.
+        _$svg.remove();
+
+        var success = parseSVG(verticesRaw, bordersRaw, mountainsRaw, valleysRaw, cutsRaw, triangulationsRaw, hingesRaw);
+        if (!success) return false;
+        generateSvg();
+        return true;
+    }
+
+    function loadSVGText(svgText, isDemo){
+        if (typeof gtag === 'function') {
+            if (isDemo) {
+                gtag('event', 'demoFile', { 'CC': false });
+            } else {
+                gtag('event', 'uploadCP', { 'CC': false });
+            }
+        }
+        try {
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(svgText, "image/svg+xml");
+            var svgElement = doc.documentElement;
+            if (!svgElement || doc.querySelector("parsererror")) {
+                console.warn("Failed to parse SVG string:", doc.querySelector("parsererror"));
+                return false;
+            }
+            return processParsedSvg(svgElement);
+        } catch (e) {
+            console.error("Error in loadSVGText:", e);
+            return false;
+        }
+    }
+
     function loadSVG(url, isDemo){
-        if (isDemo) {
-            gtag('event', 'demoFile', { 'CC': false });
-        } else {
-            gtag('event', 'uploadCP', { 'CC': false });
+        if (typeof gtag === 'function') {
+            if (isDemo) {
+                gtag('event', 'demoFile', { 'CC': false });
+            } else {
+                gtag('event', 'uploadCP', { 'CC': false });
+            }
         }
         // Some SVG files start with UTF-8 byte order mark (BOM) EF BB BF,
         // which encodes in Base64 to 77u/ -- remove this, as it breaks the
@@ -376,64 +454,7 @@ function initPattern(globals){
         url = url.replace(/^(data:image\/svg\+xml;base64,)77u\//, '$1');
 
         SVGloader.load(url, function(svg){
-
-            var _$svg = $(svg);
-            if (_$svg.find('parsererror').length) {
-                globals.warn("Error parsing SVG: " + svg.innerText);
-                return console.warn(_$svg.find('parsererror')[0]);
-            }
-
-            // Add SVG to page dom to reveal rendered styles (including CSS).
-            $(svg).appendTo('body');
-
-            clearAll();
-
-            //warn of groups
-            // var $groups = _$svg.children("g");
-            // if ($groups.length>0){
-            //     globals.warn("Grouped elements found in SVG, these are currently ignored by the app.  " +
-            //         "Please ungroup all elements before importing.");
-            // }
-
-            //format all appropriate svg elements
-            _$svg.find("symbol").remove();
-            _$svg.find("defs > :not(style)").remove();
-            var $paths = _$svg.find("path");
-            var $lines = _$svg.find("line");
-            var $rects = _$svg.find("rect");
-            var $polygons = _$svg.find("polygon");
-            var $polylines = _$svg.find("polyline");
-            $paths.css({fill:"none", 'stroke-dasharray':"none"});
-            $lines.css({fill:"none", 'stroke-dasharray':"none"});
-            $rects.css({fill:"none", 'stroke-dasharray':"none"});
-            $polygons.css({fill:"none", 'stroke-dasharray':"none"});
-            $polylines.css({fill:"none", 'stroke-dasharray':"none"});
-
-            findType(verticesRaw, bordersRaw, borderFilter, $paths, $lines, $rects, $polygons, $polylines);
-            findType(verticesRaw, mountainsRaw, mountainFilter, $paths, $lines, $rects, $polygons, $polylines);
-            findType(verticesRaw, valleysRaw, valleyFilter, $paths, $lines, $rects, $polygons, $polylines);
-            findType(verticesRaw, cutsRaw, cutFilter, $paths, $lines, $rects, $polygons, $polylines);
-            findType(verticesRaw, triangulationsRaw, triangulationFilter, $paths, $lines, $rects, $polygons, $polylines);
-            findType(verticesRaw, hingesRaw, hingeFilter, $paths, $lines, $rects, $polygons, $polylines);
-
-            if (badColors.length>0){
-                badColors = _.uniq(badColors);
-                var string = "Some objects found with the following stroke colors:<br/><br/>";
-                _.each(badColors, function(color){
-                    string += "<span style='background:" + color + "' class='colorSwatch'></span>" + color + "<br/>";
-                });
-                string +=  "<br/>These objects were ignored.<br/>  Please check that your file is set up correctly, <br/>" +
-                    "see <b>File > Design Tips</b> for more information.";
-                globals.warn(string);
-            }
-
-            // Now that loading is done, remove SVG from page DOM.
-            _$svg.remove();
-
-            //todo revert back to old pattern if bad import
-            var success = parseSVG(verticesRaw, bordersRaw, mountainsRaw, valleysRaw, cutsRaw, triangulationsRaw, hingesRaw);
-            if (!success) return;
-            generateSvg();
+            processParsedSvg(svg);
         },
         function(){},
         function(error){
@@ -1263,14 +1284,53 @@ function initPattern(globals){
     }
 
     function setFoldData(fold, isDemo, returnCreaseParams){
-        if (!returnCreaseParams) {
-            if (isDemo) {
-                gtag('event', 'demoFile', { 'CC': false });
-            } else {
-                gtag('event', 'uploadCP', { 'CC': false });
+        if (typeof gtag === 'function') {
+            if (!returnCreaseParams) {
+                if (isDemo) {
+                    gtag('event', 'demoFile', { 'CC': false });
+                } else {
+                    gtag('event', 'uploadCP', { 'CC': false });
+                }
             }
         }
         clearAll();
+
+        // Ensure fold has valid faces_vertices before triangulatePolys runs!
+        if (!fold.faces_vertices || fold.faces_vertices.length === 0) {
+            try {
+                // Ensure 2D coordinates for sort_vertices_vertices
+                var orig2d = [];
+                for (var i=0; i<fold.vertices_coords.length; i++) {
+                    var v = fold.vertices_coords[i];
+                    if (v.length === 3) {
+                        orig2d.push([v[0], v[2] !== undefined && v[2] !== 0 ? v[2] : v[1]]);
+                    } else {
+                        orig2d.push([v[0], v[1]]);
+                    }
+                }
+                fold.vertices_coords = orig2d;
+
+                fold = FOLD.filter.collapseNearbyVertices(fold, globals.vertTol);
+                fold = FOLD.filter.removeLoopEdges(fold);
+                fold = FOLD.filter.removeDuplicateEdges_vertices(fold);
+                fold = findIntersections(fold, globals.vertTol);
+                fold = FOLD.filter.collapseNearbyVertices(fold, globals.vertTol);
+                fold = FOLD.filter.removeLoopEdges(fold);
+                fold = FOLD.filter.removeDuplicateEdges_vertices(fold);
+
+                fold = FOLD.convert.edges_vertices_to_vertices_vertices_unsorted(fold);
+                fold = removeStrayVertices(fold);
+                fold = removeRedundantVertices(fold, 0.01);
+                fold.vertices_vertices = FOLD.convert.sort_vertices_vertices(fold);
+                fold = FOLD.convert.vertices_vertices_to_faces_vertices(fold);
+                fold = edgesVerticesToVerticesEdges(fold);
+                fold = removeBorderFaces(fold);
+                fold = reverseFaceOrder(fold);
+            } catch (err) {
+                console.warn("Could not construct topological faces for fold:", err);
+            }
+        }
+
         var allCreaseParams = processFold(fold, returnCreaseParams);
         generateSvg();
         return allCreaseParams;
@@ -1282,6 +1342,7 @@ function initPattern(globals){
 
     return {
         loadSVG: loadSVG,
+        loadSVGText: loadSVGText,
         saveSVG: saveSVG,
         getFoldData: getFoldData,
         getTriangulatedFaces: getTriangulatedFaces,
