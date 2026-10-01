@@ -105,7 +105,7 @@ function setSimFoldPercent(percent) {
 
 function loadModelInSim(model) {
   currentModel = model;
-  creaseViewer.setModel(model, 0);
+  creaseViewer.setModel(model);
 
   stepSlider.min = '0';
   stepSlider.max = '100';
@@ -116,7 +116,9 @@ function loadModelInSim(model) {
     const win = getSimWindow();
     if (win && win.globals && win.globals.pattern) {
       try {
-        if (model.foldData) {
+        if (model.svgData && typeof win.globals.pattern.loadSVGText === 'function') {
+          win.globals.pattern.loadSVGText(model.svgData);
+        } else if (model.foldData) {
           win.globals.pattern.setFoldData(JSON.parse(JSON.stringify(model.foldData)), true);
         } else if (model.svgData) {
           const svgUri = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(model.svgData);
@@ -127,15 +129,9 @@ function loadModelInSim(model) {
           win.$(`.demo[data-url='${model.simUrl}']`).click();
         }
 
-        // Direct simulator pattern endpoint sync: Ensure 2D Crease Viewer exactly reflects the simulator's internal foldData!
-        setTimeout(() => {
-          if (win && win.globals && win.globals.pattern) {
-            const activeSimFold = win.globals.pattern.getFoldData(true) || win.globals.pattern.getFoldData(false);
-            if (activeSimFold && activeSimFold.vertices_coords && activeSimFold.vertices_coords.length > 0) {
-              creaseViewer.setModel({ foldData: activeSimFold });
-            }
-          }
-        }, 120);
+        if (typeof win.globals.setCreasePercent === 'function') {
+          win.globals.setCreasePercent(0);
+        }
       } catch (e) {
         console.warn('Error loading model into origami simulator:', e);
       }
@@ -176,14 +172,15 @@ async function process3DMesh(objText, modelName = 'Synthesized 3D Model') {
     // Build model structure for CreasePatternViewer
     const customModel = {
       id: `mesh-${Date.now()}`,
-      name: modelName,
+      name: `${modelName} (${skeleton.morphology.toUpperCase()})`,
       paperSize: 1000,
       foldData,
       svgData,
+      morphology: skeleton.morphology,
       steps: [
         {
           step: 1,
-          description: `Extremity tree with ${skeleton.extremities.length} flaps solved`,
+          description: `${skeleton.morphology.toUpperCase()} origami base synthesized (${foldData.faces_vertices ? foldData.faces_vertices.length : 0} faces)`,
           creases: foldData.edges_vertices.map((e, idx) => {
             const v1 = foldData.vertices_coords[e[0]];
             const v2 = foldData.vertices_coords[e[1]];
