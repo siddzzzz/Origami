@@ -94,11 +94,8 @@ export class CreasePatternViewer {
 
       const get2DPos = (v) => {
         if (!v) return [0, 0];
-        // In FOLD format: 2D is [x, y], 3D is [x, y, z] or [x, 0, z] where z is 2D Y
-        if (v.length === 2) return [v[0], v[1]];
-        // If 3D coordinates, z is the 2D planar Y coordinate if y is 0
-        const y2D = Math.abs(v[1]) < 0.0001 && v[2] !== undefined ? v[2] : v[1];
-        return [v[0], y2D];
+        if (v.length >= 2) return [v[0], v[1]];
+        return [0, 0];
       };
 
       const updateBounds = (x, y) => {
@@ -511,6 +508,27 @@ export class CreasePatternViewer {
         ctx.stroke();
       } else if (elem.type === 'rect') {
         ctx.strokeRect(elem.x, elem.y, elem.w, elem.h);
+      }
+    });
+
+    // Draw vertex junction nodes
+    ctx.setLineDash([]);
+    const drawnNodes = new Set();
+    const nodeRadius = Math.max(1.8, maxDim / 320);
+
+    elements.forEach(elem => {
+      if (elem.type === 'line') {
+        const pts = [[elem.x1, elem.y1], [elem.x2, elem.y2]];
+        pts.forEach(([px, py]) => {
+          const key = `${Math.round(px)},${Math.round(py)}`;
+          if (!drawnNodes.has(key)) {
+            drawnNodes.add(key);
+            ctx.beginPath();
+            ctx.arc(px, py, nodeRadius, 0, Math.PI * 2);
+            ctx.fillStyle = '#0f172a';
+            ctx.fill();
+          }
+        });
       }
     });
 
