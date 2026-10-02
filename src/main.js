@@ -323,6 +323,20 @@ modelSelect.addEventListener('change', (e) => {
   const selected = customModelsMap.get(val) || CLEAN_ORIGAMI_MODELS.find(m => m.id === val);
   if (selected) {
     loadModelInSim(selected);
+    const morphMap = {
+      'crane-3d': 'bird',
+      'box-pleat': 'box_pleat',
+      'miura-ori': 'miura_corrugation',
+      'fish-base': 'fish',
+      'frog-base': 'frog',
+      'bunny-base': 'bunny',
+      'pyramid-base': 'pyramid'
+    };
+    const morph = selected.morphology || morphMap[selected.id];
+    if (morph && morphologySelect) {
+      morphologySelect.value = morph;
+      if (hudStatus) hudStatus.textContent = `Active (${morph.toUpperCase()})`;
+    }
   }
 });
 
