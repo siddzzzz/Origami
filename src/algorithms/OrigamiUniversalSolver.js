@@ -10,7 +10,7 @@
  * 5. 'frog': 8-flap blintzed waterbomb / frog base (amphibians, quadrupeds, multilimbed creatures, bipeds)
  * 6. 'bird': Traditional diamond crane / bird base (winged creatures, dragons, eagles)
  * 7. 'bunny': Upright dorsal ear pleats, snout crimp, and crouching hind leg folds
- * 8. 'pyramid': Concentric fluted iso-area stepped pyramid tiers, There are more yet to come, these are for testing only 
+ * 8. 'pyramid': Concentric fluted iso-area stepped pyramid tiers, There are more yet to come, these are for testing only, Currently this code needs some optimization to shape more shapes in a better and comprehensive way
  */
 
 export class OrigamiUniversalSolver {
