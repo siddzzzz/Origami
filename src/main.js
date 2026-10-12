@@ -111,6 +111,17 @@ function setSimFoldPercent(percent) {
   }
 }
 
+let isSimReady = false;
+
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.from === 'OrigamiSimulator' && e.data.status === 'ready') {
+    isSimReady = true;
+    if (currentModel) {
+      loadModelInSim(currentModel);
+    }
+  }
+});
+
 function loadModelInSim(model) {
   currentModel = model;
   creaseViewer.setModel(model);
@@ -120,21 +131,35 @@ function loadModelInSim(model) {
   stepSlider.value = '0';
   setSimFoldPercent(0);
 
-  const applyToSim = (retries = 5) => {
+  const applyToSim = (retries = 20) => {
     const win = getSimWindow();
-    if (win && win.globals && win.globals.pattern) {
+    const isGlobReady = win && win.globals && win.globals.pattern && win.globals.model && win.globals.dynamicSolver;
+
+    if (isGlobReady) {
+      isSimReady = true;
       try {
+        let loaded = false;
+
+        // Try loadSVGText first
         if (model.svgData && typeof win.globals.pattern.loadSVGText === 'function') {
-          win.globals.pattern.loadSVGText(model.svgData);
-        } else if (model.foldData) {
+          loaded = win.globals.pattern.loadSVGText(model.svgData);
+        }
+
+        // Try setFoldData if loadSVGText failed or wasn't provided
+        if (!loaded && model.foldData && typeof win.globals.pattern.setFoldData === 'function') {
           win.globals.pattern.setFoldData(JSON.parse(JSON.stringify(model.foldData)), true);
-        } else if (model.svgData) {
-          const svgUri = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(model.svgData);
-          win.globals.pattern.loadSVG(svgUri);
-        } else if (model.simUrl && win.globals.importer) {
-          win.globals.importer.importDemoFile(model.simUrl);
-        } else if (win.$ && model.simUrl) {
-          win.$(`.demo[data-url='${model.simUrl}']`).click();
+          loaded = true;
+        }
+
+        // Try simUrl fallback if neither worked
+        if (!loaded && model.simUrl) {
+          if (win.globals.importer && typeof win.globals.importer.importDemoFile === 'function') {
+            win.globals.importer.importDemoFile(model.simUrl);
+            loaded = true;
+          } else if (win.$) {
+            win.$(`.demo[data-url='${model.simUrl}']`).click();
+            loaded = true;
+          }
         }
 
         if (typeof win.globals.setCreasePercent === 'function') {
@@ -144,7 +169,7 @@ function loadModelInSim(model) {
         console.warn('Error loading model into origami simulator:', e);
       }
     } else if (retries > 0) {
-      setTimeout(() => applyToSim(retries - 1), 200);
+      setTimeout(() => applyToSim(retries - 1), 150);
     }
   };
 
