@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 /**
  * TargetMeshViewer
- * Interactive Three.js viewer dedicated to displaying the uploaded 3D Target Mesh (.OBJ)
+ * Interactive Three.js viewer dedicated to displaying the uploaded 3D Target Mesh (.OBJ) So that the uses can verify their uploaded model
  * Features:
  * - Solid matte clay / metal material rendering
  * - Wireframe overlay

@@ -8,7 +8,7 @@ import * as THREE from 'three';
  * - NEVER breaks pieces apart.
  * - NEVER teleports vertices.
  * - Folds each flap strictly about its designated crease line with exact quaternion rotations.
- * - Ready for AI / RL: Exposes state tensor (fold angles, 3D vertex positions, crease status).
+ * - Ready for AI / RL: Exposes state tensor (fold angles, 3D vertex positions, crease status). Despite all this there were some major problems
  */
 
 export class SingleSheetSimulator {

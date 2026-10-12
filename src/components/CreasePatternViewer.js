@@ -4,7 +4,7 @@
  * - Mountain folds (Red #ef4444)
  * - Valley folds (Blue #3b82f6)
  * - Boundary / Cut edges (Dark Slate #1e293b / Green #22c55e)
- * - Facet / Triangulation hinges (Yellow/Gray)
+ * - Facet / Triangulation hinges (Yellow/Gray), need to make it much smaller now to make more detailed reconstruction 
  */
 
 export class CreasePatternViewer {
