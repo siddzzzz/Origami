@@ -65,12 +65,14 @@ $(function() {
     globals.curvedFolding = initCurvedFolding(globals);//for curved folding
 
     // Load demo model: waterbomb unless model specified in URL via ?model=FILE
-    // where FILE is the data-url attribute of an <a class="demo">.
-    var model = 'Tessellations/huffmanWaterbomb.svg';
+    // If embedded inside an iframe (parent !== window), skip default demo to prevent race conditions with parent model loader
+    var isInIframe = window.parent && window.parent !== window;
     var match = /[\\?&]model=([^&#]*)/.exec(location.search);
     if (match) {
-        model = match[1];
+        var model = match[1].replace(/'/g, '');
+        $(".demo[data-url='"+model+"']").click();
+    } else if (!isInIframe) {
+        var model = 'Tessellations/huffmanWaterbomb.svg';
+        $(".demo[data-url='"+model+"']").click();
     }
-    model = model.replace(/'/g, ''); // avoid messing up query
-    $(".demo[data-url='"+model+"']").click();
 });
