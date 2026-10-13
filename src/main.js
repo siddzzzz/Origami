@@ -162,8 +162,20 @@ function loadModelInSim(model) {
           }
         }
 
+        // Re-align crease fold angle, reset solver, and trigger fresh render
+        win.globals.creasePercent = 0;
+        win.globals.shouldChangeCreasePercent = true;
         if (typeof win.globals.setCreasePercent === 'function') {
           win.globals.setCreasePercent(0);
+        }
+        if (win.globals.model && typeof win.globals.model.reset === 'function') {
+          win.globals.model.reset();
+        }
+        if (win.globals.dynamicSolver && typeof win.globals.dynamicSolver.reset === 'function') {
+          win.globals.dynamicSolver.reset();
+        }
+        if (win.globals.threeView && typeof win.globals.threeView.render === 'function') {
+          win.globals.threeView.render();
         }
       } catch (e) {
         console.warn('Error loading model into origami simulator:', e);
