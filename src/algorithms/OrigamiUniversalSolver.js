@@ -892,22 +892,28 @@ export class OrigamiUniversalSolver {
       if (y > maxY) maxY = y;
     });
 
-    const pad = 25;
-    const w = Math.ceil(maxX - minX + pad * 2);
-    const h = Math.ceil(maxY - minY + pad * 2);
+    const margin = 50;
+    const w = Math.ceil(maxX - minX + margin * 2);
+    const h = Math.ceil(maxY - minY + margin * 2);
 
     let svg = `<?xml version="1.0" encoding="utf-8"?>\n`;
-    svg += `<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="${minX - pad} ${minY - pad} ${w} ${h}" width="${w}" height="${h}">\n`;
+    svg += `<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}px" height="${h}px">\n`;
 
     foldData.edges_vertices.forEach((edge, idx) => {
       const v1 = coords[edge[0]];
       const v2 = coords[edge[1]];
       if (!v1 || !v2) return;
 
-      const x1 = v1[0];
-      const y1 = v1[2] !== undefined && v1[2] !== 0 ? v1[2] : v1[1];
-      const x2 = v2[0];
-      const y2 = v2[2] !== undefined && v2[2] !== 0 ? v2[2] : v2[1];
+      const rawX1 = v1[0];
+      const rawY1 = v1[2] !== undefined && v1[2] !== 0 ? v1[2] : v1[1];
+      const rawX2 = v2[0];
+      const rawY2 = v2[2] !== undefined && v2[2] !== 0 ? v2[2] : v2[1];
+
+      // Shift to non-negative pixel coordinates
+      const x1 = rawX1 - minX + margin;
+      const y1 = rawY1 - minY + margin;
+      const x2 = rawX2 - minX + margin;
+      const y2 = rawY2 - minY + margin;
 
       const type = foldData.edges_assignment[idx];
       let stroke = '#000000';
