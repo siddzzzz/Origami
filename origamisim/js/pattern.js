@@ -592,6 +592,11 @@ function initPattern(globals){
             var vertex = fold.vertices_coords[i];
             if (vertex.length === 2) {
                 fold.vertices_coords[i] = [vertex[0], 0, vertex[1]];
+            } else if (vertex.length === 3 && vertex[2] === 0) {
+                // Standard 2D FOLD format where Z=0: map (x, y, 0) to Three.js ground plane (x, 0, y)
+                fold.vertices_coords[i] = [vertex[0], 0, vertex[1]];
+            } else if (vertex.length === 3 && vertex[1] === 0) {
+                // Already in ground plane (x, 0, z)
             } else {
                 is2d = false;
             }
