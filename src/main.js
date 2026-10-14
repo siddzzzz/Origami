@@ -556,13 +556,15 @@ function runAiStep() {
   hudScore.textContent = `${result.bestScore}%`;
   hudStatus.textContent = 'Active';
 
-  // Update 2D and 3D with best candidate
+  // Update 2D and 3D with best candidate while preserving simUrl fallback
   const optimizedModel = {
     id: currentModel.id,
     name: currentModel.name,
     paperSize: 1000,
     foldData: result.bestPattern.foldData,
     svgData: result.bestPattern.svgData,
+    simUrl: currentModel.simUrl,
+    morphology: currentModel.morphology,
     steps: [
       {
         step: 1,
@@ -585,6 +587,17 @@ function runAiStep() {
 
   customModelsMap.set(optimizedModel.id, optimizedModel);
   loadModelInSim(optimizedModel);
+}
+
+// AI Optimize button in Header
+if (btnOptimizeAi) {
+  btnOptimizeAi.addEventListener('click', () => {
+    if (!activeMeshTarget) {
+      modalImport.classList.remove('hidden');
+      return;
+    }
+    btnRunAiLoop.click();
+  });
 }
 
 // Run 25 Generations Loop
