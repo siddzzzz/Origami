@@ -111,12 +111,43 @@ export class OrigamiAIOptimizer {
     population.forEach((candidate, idx) => {
       const pattern = this.synthesizeCandidate(candidate);
       
-      // Simulate/estimate folded vertex positions
-      const paper3DPoints = pattern.foldData.vertices_coords.map(v => ({
+      // Simulate folded 3D vertex positions using fold assignments and target angles
+      const coords = pattern.foldData.vertices_coords;
+      const edges = pattern.foldData.edges_vertices;
+      const assignments = pattern.foldData.edges_assignment;
+      const angles = pattern.foldData.edges_foldAngle;
+
+      // Start with flat sheet coordinates
+      const paper3DPoints = coords.map(v => ({
         x: v[0],
         y: v[1],
-        z: v[2]
+        z: v[2] !== undefined ? v[2] : 0
       }));
+
+      // Approximate 3D displacement induced by mountain (M) and valley (V) creases
+      if (Array.isArray(edges) && Array.isArray(assignments)) {
+        edges.forEach((edge, edgeIdx) => {
+          const type = assignments[edgeIdx];
+          if (type !== 'M' && type !== 'V') return;
+
+          const v1 = paper3DPoints[edge[0]];
+          const v2 = paper3DPoints[edge[1]];
+          if (!v1 || !v2) return;
+
+          const foldFactor = type === 'M' ? -1 : 1;
+          const targetAngle = angles && angles[edgeIdx] ? angles[edgeIdx] : (type === 'M' ? -180 : 180);
+          const rad = (Math.abs(targetAngle) / 180) * Math.PI;
+
+          // Lift/displace vertices into the 3D volume according to fold angle
+          const midX = (v1.x + v2.x) / 2;
+          const midY = (v1.y + v2.y) / 2;
+          const distFromCenter = Math.hypot(midX, midY);
+
+          const lift = Math.sin(rad * 0.5) * foldFactor * (distFromCenter * 0.35);
+          v1.z += lift * 0.5;
+          v2.z += lift * 0.5;
+        });
+      }
 
       const evaluation = OrigamiFitnessEvaluator.evaluateFitness(paper3DPoints, this.targetVertices);
 
