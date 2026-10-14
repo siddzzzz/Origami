@@ -230,6 +230,17 @@ async function process3DMesh(objText, modelName = 'Synthesized 3D Model') {
     hudLoss.textContent = initialEval.totalLoss.toFixed(3);
     hudScore.textContent = `${initialEval.scorePercent}%`;
 
+    const morphSimUrlMap = {
+      bird: 'Origami/traditionalCrane.svg',
+      box_pleat: 'Pleating/BoxPleatPyramid.fold',
+      miura_corrugation: 'Tessellations/miura-ori.svg',
+      fish: 'Origami/airplane.svg',
+      frog: 'Bases/frogBase.svg',
+      bunny: 'Bases/birdBase.svg',
+      pyramid: 'Tessellations/waterbomb.svg',
+      treemaker: 'Origami/traditionalCrane.svg'
+    };
+
     // Build model structure for CreasePatternViewer
     const customModel = {
       id: `mesh-${Date.now()}`,
@@ -237,6 +248,7 @@ async function process3DMesh(objText, modelName = 'Synthesized 3D Model') {
       paperSize: 1000,
       foldData,
       svgData,
+      simUrl: morphSimUrlMap[baseMorphology] || 'Bases/birdBase.svg',
       morphology: baseMorphology,
       steps: [
         {
