@@ -169,15 +169,19 @@ export class MeshSkeletonizer {
       return 'pyramid';
     }
 
-    // 5. Check for Bunny: Two tall dorsal ears (+Y > 0.75) with compact body
-    const tallEars = extremities.filter(e => e.dir.y > 0.75);
-    if (tallEars.length >= 2 || (extremities.some(e => e.dir.y > 0.85) && spanY > spanX * 0.70)) {
+    // 5. Check for Bunny: Bilateral tall dorsal ears (pairs of extremities with y > 0.65 and lateral X spacing)
+    const bilateralEars = extremities.filter(e => e.dir.y > 0.65 && Math.abs(e.dir.x) > 0.08);
+    const hasLeftEar = bilateralEars.some(e => e.dir.x < -0.08);
+    const hasRightEar = bilateralEars.some(e => e.dir.x > 0.08);
+    const isUprightStance = spanY >= spanZ * 0.85;
+    if (hasLeftEar && hasRightEar && isUprightStance && bilateralEars.length >= 2) {
       return 'bunny';
     }
 
-    // 6. Check for Frog / Multilimbed (>= 3 ground limbs or multi-limb extremities)
-    const groundLegs = extremities.filter(e => e.dir.y < -0.30);
-    if (groundLegs.length >= 3 || extremities.length >= 6) {
+    // 6. Check for Multilimbed / Amphibians / Quadrupeds / Frogs (4+ ground/lateral limbs)
+    const lateralLimbs = extremities.filter(e => Math.abs(e.dir.x) > 0.35);
+    const groundLimbs = extremities.filter(e => e.dir.y < -0.15);
+    if (lateralLimbs.length >= 3 || groundLimbs.length >= 3 || extremities.length >= 6) {
       return 'frog';
     }
 
