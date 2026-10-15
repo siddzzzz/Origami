@@ -19,6 +19,7 @@ const stepSlider = document.getElementById('step-slider');
 const progressPercent = document.getElementById('progress-percent');
 const speedSelect = document.getElementById('speed-select');
 const btnExportSvg = document.getElementById('btn-export-svg');
+const btnExportFold = document.getElementById('btn-export-fold');
 const btnReset2D = document.getElementById('btn-reset-2d');
 const btnImportMesh = document.getElementById('btn-import-mesh');
 const modalImport = document.getElementById('modal-import');
@@ -425,20 +426,53 @@ btnReset2D.addEventListener('click', () => {
   creaseViewer.resetView();
 });
 
-// SVG Crease Pattern Exporter
+// Production Vector SVG & Laser-Cutter Exporter
 btnExportSvg.addEventListener('click', () => {
-  const svgData = creaseViewer.exportToSVG();
+  let svgData = null;
+  if (currentModel.foldData) {
+    svgData = OrigamiUniversalSolver.foldToPrintableSVG(currentModel.foldData, {
+      title: `${currentModel.name || 'Origami Crease Pattern'}`
+    });
+  } else {
+    svgData = creaseViewer.exportToSVG();
+  }
+
   if (!svgData) return;
   const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${currentModel.id}-crease-pattern.svg`;
+  a.download = `${currentModel.id || 'origami'}-crease-pattern.svg`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 });
+
+// Standard .FOLD Format Exporter (Spec 1.1)
+if (btnExportFold) {
+  btnExportFold.addEventListener('click', () => {
+    if (!currentModel.foldData) {
+      alert('No mathematical FOLD geometry available for this model.');
+      return;
+    }
+
+    const foldContent = OrigamiUniversalSolver.foldToFOLD(currentModel.foldData, {
+      title: currentModel.name || 'Origami Crease Pattern',
+      author: 'OrigamiAI Universal Solver'
+    });
+
+    const blob = new Blob([foldContent], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentModel.id || 'origami'}-pattern.fold`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+}
 
 // Modal handlers
 btnImportMesh.addEventListener('click', () => {
