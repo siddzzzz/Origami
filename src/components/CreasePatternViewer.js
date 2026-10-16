@@ -25,6 +25,10 @@ export class CreasePatternViewer {
     this.parsedGeometry = null;
     this.cachedUrl = null;
 
+    // Interactive step & fold highlighting
+    this.currentStep = 0;
+    this.highlightCreaseIndices = null;
+
     this.initEvents();
     this.resize();
   }
@@ -238,8 +242,9 @@ export class CreasePatternViewer {
     }
   }
 
-  setStep() {
-    // Re-render
+  setStep(stepIdx, highlightIndices = null) {
+    this.currentStep = stepIdx;
+    this.highlightCreaseIndices = highlightIndices;
     this.render();
   }
 
@@ -465,11 +470,15 @@ export class CreasePatternViewer {
     ctx.shadowBlur = 0;
 
     // Draw pattern lines with origami notation
-    elements.forEach(elem => {
+    const highlightSet = this.highlightCreaseIndices ? new Set(this.highlightCreaseIndices) : null;
+
+    elements.forEach((elem, elemIdx) => {
       ctx.beginPath();
       let color = '#0f172a';
       let lineWidth = maxDim / 180;
       let dash = [];
+
+      const isHighlighted = highlightSet && highlightSet.has(elemIdx);
 
       if (elem.stroke === 'mountain') {
         color = '#ef4444'; // Red
@@ -508,6 +517,21 @@ export class CreasePatternViewer {
         ctx.stroke();
       } else if (elem.type === 'rect') {
         ctx.strokeRect(elem.x, elem.y, elem.w, elem.h);
+      }
+
+      // Draw prominent glowing highlight if active in current fold step
+      if (isHighlighted && elem.type === 'line') {
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(elem.x1, elem.y1);
+        ctx.lineTo(elem.x2, elem.y2);
+        ctx.strokeStyle = '#f59e0b'; // Radiant amber
+        ctx.lineWidth = Math.max(3.5, lineWidth * 2.2);
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 10;
+        ctx.setLineDash([]);
+        ctx.stroke();
+        ctx.restore();
       }
     });
 

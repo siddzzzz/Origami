@@ -43,6 +43,12 @@ const minCreaseSlider = document.getElementById('min-crease-slider');
 const minCreaseLabel = document.getElementById('min-crease-label');
 const morphologySelect = document.getElementById('morphology-select');
 
+// Folding Step Guide Banner Elements
+const stepBanner = document.getElementById('step-banner');
+const stepCountLabel = document.getElementById('step-count-label');
+const stepTitleLabel = document.getElementById('step-title-label');
+const stepDescLabel = document.getElementById('step-desc-label');
+
 let currentDetailLevel = 2; // Level 3: Micro-Sculpted by default
 let currentMinCreaseLength = 35; // 35mm physical limit by default
 let currentMorphology = 'auto'; // Auto-detect by default
@@ -102,14 +108,38 @@ function setSimFoldPercent(percent) {
   stepSlider.value = (currentPercent * 100).toString();
   progressPercent.textContent = `${Math.round(currentPercent * 100)}%`;
 
-  // Step index for 2D diagram
-  if (currentModel.steps && currentModel.steps.length > 1) {
-    const stepIdx = Math.min(
-      currentModel.steps.length - 1,
-      Math.floor(currentPercent * currentModel.steps.length)
-    );
-    creaseViewer.setStep(stepIdx);
+  // Step index and visual folding guide
+  const steps = currentModel && currentModel.steps ? currentModel.steps : [
+    { stepNumber: 1, title: 'Flat Crease Sheet', instruction: 'Start with the uncreased paper sheet.' },
+    { stepNumber: 2, title: 'Mountain & Valley Collapse', instruction: 'Simultaneously fold creases according to mountain/valley assignments.' },
+    { stepNumber: 3, title: 'Fully Folded 3D Structure', instruction: 'Equilibrium geometry matches target 3D model.' }
+  ];
+
+  const totalSteps = steps.length;
+  // Calculate which step is active based on percent [0.0 - 1.0]
+  const stepIdx = Math.min(totalSteps - 1, Math.floor(currentPercent * totalSteps));
+  const activeStep = steps[stepIdx] || steps[0];
+
+  // Update step banner
+  if (stepCountLabel) stepCountLabel.textContent = `Step ${activeStep.stepNumber || stepIdx + 1} of ${totalSteps}`;
+  if (stepTitleLabel) stepTitleLabel.textContent = activeStep.title || `Fold Phase ${stepIdx + 1}`;
+  if (stepDescLabel) stepDescLabel.textContent = activeStep.instruction || 'Fold along indicated crease lines.';
+
+  // Highlight active creases on 2D diagram
+  let highlightIndices = null;
+  if (activeStep.creaseHighlightIndex) {
+    highlightIndices = activeStep.creaseHighlightIndex;
+  } else if (currentModel.foldData && currentModel.foldData.edges_vertices) {
+    // Dynamically apportion creases across steps
+    const numEdges = currentModel.foldData.edges_vertices.length;
+    const chunkSize = Math.ceil(numEdges / totalSteps);
+    const startEdge = stepIdx * chunkSize;
+    const endEdge = Math.min(numEdges, startEdge + chunkSize);
+    highlightIndices = [];
+    for (let i = startEdge; i < endEdge; i++) highlightIndices.push(i);
   }
+
+  creaseViewer.setStep(stepIdx, highlightIndices);
 }
 
 let isSimReady = false;
