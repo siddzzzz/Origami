@@ -49,8 +49,8 @@ const stepCountLabel = document.getElementById('step-count-label');
 const stepTitleLabel = document.getElementById('step-title-label');
 const stepDescLabel = document.getElementById('step-desc-label');
 
-let currentDetailLevel = 2; // Level 3: Micro-Sculpted by default
-let currentMinCreaseLength = 35; // 35mm physical limit by default
+let currentDetailLevel = 3; // Level 4: High-Fidelity Minute Folds by default
+let currentMinCreaseLength = 20; // 20mm physical limit by default (allows minute detailed folding)
 let currentMorphology = 'auto'; // Auto-detect by default
 
 // Target Mesh Inspector elements
@@ -740,7 +740,8 @@ function rebuildActiveModel() {
   if (hudScore) hudScore.textContent = `${evalResult.scorePercent}%`;
   if (hudStatus) hudStatus.textContent = `Active (${baseMorphology.toUpperCase()})`;
 
-  const levelName = currentDetailLevel === 0 ? 'Macro' : currentDetailLevel === 1 ? 'Articulated' : 'Micro-Sculpted';
+  const levelNames = ['Macro', 'Articulated', 'Micro-Sculpted', 'High-Fidelity', 'Ultra-Detail'];
+  const levelName = levelNames[currentDetailLevel] || 'Micro-Sculpted';
   currentModel.foldData = foldData;
   currentModel.svgData = svgData;
   currentModel.steps = [

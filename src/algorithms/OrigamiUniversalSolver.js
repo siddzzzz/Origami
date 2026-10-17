@@ -176,6 +176,35 @@ export class OrigamiUniversalSolver {
       }
     }
 
+    // Level 4: High-Fidelity Minute Folds - Inter-branch cross-rib triangulation
+    if (detail >= 3) {
+      for (let i = 0; i < N; i++) {
+        const next = (i + 1) % N;
+        const insetI = N + i;
+        const insetNext = N + next;
+        const midAngle = ((sortedExts[i]?.azimuth || 0) + (sortedExts[next]?.azimuth || 0)) / 2;
+        const crossNode = vertices_coords.length;
+        vertices_coords.push([Math.cos(midAngle) * 0.45 * W, Math.sin(midAngle) * 0.45 * W, 0]);
+
+        addEdge(insetI, crossNode, 'V', 180);
+        addEdge(insetNext, crossNode, 'V', 180);
+        addEdge(crossNode, centerIdx, 'M', -180);
+      }
+    }
+
+    // Level 5: Ultra-Detail Micro-Facets - Terminal extremity crimps & facet subdivision
+    if (detail >= 4) {
+      for (let i = 0; i < N; i++) {
+        const ext = sortedExts[i];
+        const angle = ext?.azimuth ?? ((i / N) * Math.PI * 2);
+        const tipKnuckle = vertices_coords.length;
+        vertices_coords.push([Math.cos(angle) * 0.88 * W, Math.sin(angle) * 0.88 * W, 0]);
+
+        addEdge(i, tipKnuckle, 'V', 180);
+        addEdge(tipKnuckle, 2 * N + i, 'M', -180);
+      }
+    }
+
     return {
       file_spec: 1.1,
       file_creator: 'OrigamiUniversalSolver',
@@ -197,7 +226,7 @@ export class OrigamiUniversalSolver {
     const paperSize = options.paperSize || 1000;
     const W = paperSize / 2;
     const detail = options.detailLevel ?? 2;
-    const gridN = detail >= 2 ? 8 : (detail >= 1 ? 6 : 4);
+    const gridN = detail >= 4 ? 16 : (detail >= 3 ? 12 : (detail >= 2 ? 8 : (detail >= 1 ? 6 : 4)));
     const step = (2 * W) / gridN;
 
     const vertices_coords = [];
@@ -293,8 +322,8 @@ export class OrigamiUniversalSolver {
     const W = paperSize / 2;
     const detail = options.detailLevel ?? 2;
 
-    const rows = detail >= 2 ? 6 : (detail >= 1 ? 5 : 4);
-    const cols = detail >= 2 ? 6 : (detail >= 1 ? 5 : 4);
+    const rows = detail >= 4 ? 10 : (detail >= 3 ? 8 : (detail >= 2 ? 6 : (detail >= 1 ? 5 : 4)));
+    const cols = detail >= 4 ? 10 : (detail >= 3 ? 8 : (detail >= 2 ? 6 : (detail >= 1 ? 5 : 4)));
     const dy = (2 * W) / rows;
     const dx = (2 * W) / cols;
     const shift = dx * 0.35; // Parallelogram skew angle offset
@@ -460,6 +489,21 @@ export class OrigamiUniversalSolver {
       addEdge(10, finRibR, 'M', -180);
     }
 
+    // Level 4: Minute Caudal Fin Flukes & Rays
+    if (detail >= 3) {
+      const tailRayL = vertices_coords.length; vertices_coords.push([-0.22 * W, -0.75 * W, 0]);
+      addEdge(0, tailRayL, 'M', -180); addEdge(12, tailRayL, 'V', 180);
+
+      const tailRayR = vertices_coords.length; vertices_coords.push([0.22 * W, -0.75 * W, 0]);
+      addEdge(1, tailRayR, 'M', -180); addEdge(13, tailRayR, 'V', 180);
+    }
+
+    // Level 5: Ultra-Detail Lateral Spine & Snout Crimp
+    if (detail >= 4) {
+      const snoutCrimp = vertices_coords.length; vertices_coords.push([0, 0.88 * W, 0]);
+      addEdge(6, snoutCrimp, 'V', 180); addEdge(11, snoutCrimp, 'M', -180);
+    }
+
     return {
       file_spec: 1.1,
       file_creator: 'OrigamiUniversalSolver',
@@ -564,6 +608,23 @@ export class OrigamiUniversalSolver {
       addEdge(3, kneeTL, 'M', -180); addEdge(12, kneeTL, 'V', 180);
     }
 
+    // Level 3 & 4: Ankle & Wrist Articulations
+    if (detail >= 2) {
+      const ankleBL = vertices_coords.length; vertices_coords.push([-0.86 * W, -0.86 * W, 0]);
+      addEdge(0, ankleBL, 'V', 180); addEdge(ankleBL, 16, 'M', -180);
+
+      const ankleBR = vertices_coords.length; vertices_coords.push([0.86 * W, -0.86 * W, 0]);
+      addEdge(1, ankleBR, 'V', 180); addEdge(ankleBR, 14, 'M', -180);
+    }
+
+    // Level 5: Ultra-Detail Micro-Facets - Eye pods & Head crimp
+    if (detail >= 3) {
+      const eyeL = vertices_coords.length; vertices_coords.push([-0.25 * W, 0.85 * W, 0]);
+      const eyeR = vertices_coords.length; vertices_coords.push([0.25 * W, 0.85 * W, 0]);
+      addEdge(6, eyeL, 'M', -180); addEdge(15, eyeL, 'V', 180);
+      addEdge(6, eyeR, 'M', -180); addEdge(15, eyeR, 'V', 180);
+    }
+
     return {
       file_spec: 1.1,
       file_creator: 'OrigamiUniversalSolver',
@@ -652,6 +713,27 @@ export class OrigamiUniversalSolver {
 
       const beak = vertices_coords.length; vertices_coords.push([0, 0.78 * W, 0]);
       addEdge(6, beak, 'V', 180); addEdge(11, beak, 'M', -180);
+    }
+
+    // Level 3 & 4: Secondary Wing Spans & Tail Fork
+    if (detail >= 2) {
+      const wingTipL = vertices_coords.length; vertices_coords.push([-0.88 * W, 0.40 * W, 0]);
+      addEdge(3, wingTipL, 'M', -180); addEdge(7, wingTipL, 'V', 180);
+
+      const wingTipR = vertices_coords.length; vertices_coords.push([0.88 * W, 0.40 * W, 0]);
+      addEdge(2, wingTipR, 'M', -180); addEdge(5, wingTipR, 'V', 180);
+
+      const tailFork = vertices_coords.length; vertices_coords.push([0, -0.85 * W, 0]);
+      addEdge(4, tailFork, 'V', 180); addEdge(12, tailFork, 'M', -180);
+    }
+
+    // Level 5: Ultra-Detail Feather Serrations
+    if (detail >= 3) {
+      const featherTipL = vertices_coords.length; vertices_coords.push([-0.55 * W, 0.22 * W, 0]);
+      addEdge(9, featherTipL, 'V', 180); addEdge(11, featherTipL, 'M', -180);
+
+      const featherTipR = vertices_coords.length; vertices_coords.push([0.55 * W, 0.22 * W, 0]);
+      addEdge(10, featherTipR, 'V', 180); addEdge(11, featherTipR, 'M', -180);
     }
 
     return {
@@ -751,6 +833,30 @@ export class OrigamiUniversalSolver {
       addEdge(6, snoutCrimp, 'M', -180); addEdge(11, snoutCrimp, 'V', 180);
     }
 
+    // Level 3 & 4: Upright Ear Cupping Ribs & Paw Articulations
+    if (detail >= 2) {
+      const earCupL = vertices_coords.length; vertices_coords.push([-0.42 * W, 0.88 * W, 0]);
+      addEdge(3, earCupL, 'V', 180); addEdge(6, earCupL, 'M', -180);
+
+      const earCupR = vertices_coords.length; vertices_coords.push([0.42 * W, 0.88 * W, 0]);
+      addEdge(2, earCupR, 'V', 180); addEdge(6, earCupR, 'M', -180);
+
+      const pawL = vertices_coords.length; vertices_coords.push([-0.75 * W, -0.65 * W, 0]);
+      addEdge(0, pawL, 'M', -180); addEdge(12, pawL, 'V', 180);
+
+      const pawR = vertices_coords.length; vertices_coords.push([0.75 * W, -0.65 * W, 0]);
+      addEdge(1, pawR, 'M', -180); addEdge(13, pawR, 'V', 180);
+    }
+
+    // Level 5: Ultra-Detail Cheek Crimps
+    if (detail >= 3) {
+      const cheekL = vertices_coords.length; vertices_coords.push([-0.35 * W, 0.35 * W, 0]);
+      addEdge(9, cheekL, 'V', 180); addEdge(11, cheekL, 'M', -180);
+
+      const cheekR = vertices_coords.length; vertices_coords.push([0.35 * W, 0.35 * W, 0]);
+      addEdge(10, cheekR, 'V', 180); addEdge(11, cheekR, 'M', -180);
+    }
+
     return {
       file_spec: 1.1,
       file_creator: 'OrigamiUniversalSolver',
@@ -828,6 +934,30 @@ export class OrigamiUniversalSolver {
 
       addEdge(t2_B, t2_R, 'V', 180); addEdge(t2_R, t2_T, 'V', 180);
       addEdge(t2_T, t2_L, 'V', 180); addEdge(t2_L, t2_B, 'V', 180);
+    }
+
+    // Level 4: Tier 3 Intermediate Fluting Ring
+    if (detail >= 3) {
+      const r3 = 0.32 * W;
+      const t3_B = vertices_coords.length; vertices_coords.push([0, -r3, 0]);
+      const t3_R = vertices_coords.length; vertices_coords.push([r3, 0, 0]);
+      const t3_T = vertices_coords.length; vertices_coords.push([0, r3, 0]);
+      const t3_L = vertices_coords.length; vertices_coords.push([-r3, 0, 0]);
+
+      addEdge(t3_B, t3_R, 'M', -180); addEdge(t3_R, t3_T, 'M', -180);
+      addEdge(t3_T, t3_L, 'M', -180); addEdge(t3_L, t3_B, 'M', -180);
+    }
+
+    // Level 5: Tier 4 Apex Micro-Facet Star
+    if (detail >= 4) {
+      const r4 = 0.16 * W;
+      const t4_BL = vertices_coords.length; vertices_coords.push([-r4, -r4, 0]);
+      const t4_BR = vertices_coords.length; vertices_coords.push([r4, -r4, 0]);
+      const t4_TR = vertices_coords.length; vertices_coords.push([r4, r4, 0]);
+      const t4_TL = vertices_coords.length; vertices_coords.push([-r4, r4, 0]);
+
+      addEdge(t4_BL, t4_BR, 'V', 180); addEdge(t4_BR, t4_TR, 'V', 180);
+      addEdge(t4_TR, t4_TL, 'V', 180); addEdge(t4_TL, t4_BL, 'V', 180);
     }
 
     return {

@@ -92,13 +92,15 @@
             <select id="detail-select" class="app-select" style="padding: 3px 8px; font-size: 11px; height: 26px;">
               <option value="0">Level 1: Macro Base</option>
               <option value="1">Level 2: Articulated</option>
-              <option value="2" selected>Level 3: Micro-Sculpted</option>
+              <option value="2">Level 3: Micro-Sculpted</option>
+              <option value="3" selected>Level 4: High-Fidelity Minute Folds</option>
+              <option value="4">Level 5: Ultra-Detail Micro-Facets</option>
             </select>
           </div>
           <div style="display: flex; align-items: center; gap: 6px;" title="Minimum physical crease length limit to prevent paper tearing">
             <label for="min-crease-slider" style="color: #94a3b8;">Min Crease:</label>
-            <input type="range" id="min-crease-slider" min="20" max="70" value="35" step="5" style="width: 70px; accent-color: #38bdf8; cursor: pointer;">
-            <span id="min-crease-label" style="color: #38bdf8; font-weight: 600;">35mm</span>
+            <input type="range" id="min-crease-slider" min="10" max="70" value="20" step="5" style="width: 70px; accent-color: #38bdf8; cursor: pointer;">
+            <span id="min-crease-label" style="color: #38bdf8; font-weight: 600;">20mm</span>
           </div>
           <button id="btn-step-ai" class="tool-btn" style="padding: 4px 10px; font-size: 11px;">+1 Gen</button>
           <button id="btn-run-ai-loop" class="tool-btn" style="padding: 4px 10px; font-size: 11px; background: #0284c7; color: #fff; border-color: #0284c7;">Run 25 Gens</button>
